@@ -161,6 +161,8 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
                     controller.uninstall();
                 }
             });
+            // Right-click on the window body opens the same settings menu as the toolbar button.
+            legendStage.installContextMenuOnBody();
         }
         if (legendStage.isShowing()) {
             legendStage.hide();
@@ -327,6 +329,26 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
         button.setOnAction(e -> toggleLegend(qupath));
         // Match QuPath's existing toolbar button sizing.
         button.getStyleClass().add("toolbar-button");
+        // Right-click on the toolbar button opens the legend window's settings menu
+        // (background opacity slider, lock-font toggle, reset). Built lazily so the
+        // legend stage exists by the time the menu is requested.
+        button.setOnContextMenuRequested(e -> {
+            // Ensure the stage exists; we don't show the legend, just need the stage so
+            // its property values back the menu. Lazily create on first menu open.
+            if (legendStage == null) {
+                legendStage = new ChannelLegendStage(qupath.getStage());
+                controller = new ChannelLegendController(qupath, legendStage);
+                legendStage.getStage().addEventHandler(javafx.stage.WindowEvent.WINDOW_HIDDEN, ev -> {
+                    if (controller != null) {
+                        controller.uninstall();
+                    }
+                });
+                legendStage.installContextMenuOnBody();
+            }
+            javafx.scene.control.ContextMenu menu = legendStage.buildSettingsMenu();
+            menu.show(button, e.getScreenX(), e.getScreenY());
+            e.consume();
+        });
         return button;
     }
 }

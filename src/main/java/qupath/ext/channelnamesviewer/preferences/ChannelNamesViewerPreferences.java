@@ -38,6 +38,8 @@ public final class ChannelNamesViewerPreferences {
     private static BooleanProperty fontLockedProperty;
     /** Locked font size in pt; only meaningful when {@link #fontLockedProperty} is true (v1.0.1+). */
     private static DoubleProperty lockedFontPtProperty;
+    /** Background opacity (0.05-1.0); 0.75 default matches the original Groovy script. (v1.0.3+) */
+    private static DoubleProperty backgroundOpacityProperty;
 
     private static volatile boolean installed = false;
 
@@ -67,6 +69,8 @@ public final class ChannelNamesViewerPreferences {
                 PREFIX + "fontLocked", false);
         lockedFontPtProperty = PathPrefs.createPersistentPreference(
                 PREFIX + "lockedFontPt", 20.0);
+        backgroundOpacityProperty = PathPrefs.createPersistentPreference(
+                PREFIX + "backgroundOpacity", 0.75);
 
         installed = true;
         logger.info("Channel Names Viewer preferences installed");
@@ -187,6 +191,20 @@ public final class ChannelNamesViewerPreferences {
     public static void setLockedFontPt(double v) {
         ensureInstalled();
         lockedFontPtProperty.set(v);
+    }
+
+    public static double getBackgroundOpacity() {
+        return backgroundOpacityProperty != null ? backgroundOpacityProperty.get() : 0.75;
+    }
+
+    public static void setBackgroundOpacity(double v) {
+        ensureInstalled();
+        backgroundOpacityProperty.set(v);
+    }
+
+    public static DoubleProperty backgroundOpacityProperty() {
+        ensureInstalled();
+        return backgroundOpacityProperty;
     }
 
     private static void ensureInstalled() {
