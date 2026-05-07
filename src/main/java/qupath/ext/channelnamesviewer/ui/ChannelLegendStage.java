@@ -8,7 +8,6 @@ import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleIntegerProperty;
-import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.Rectangle2D;
@@ -25,7 +24,6 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -52,29 +50,26 @@ import java.util.List;
  * stage, semi-transparent dark fill, rounded corners, drag-anywhere to move,
  * double-click to close.</p>
  *
- * <p>v1.0.3 reverted from the v1.0.0-1.0.2 {@code StageStyle.UTILITY} after
- * user feedback that the chrome-laden look diverged too far from the original
- * aesthetic. The trade is real: TRANSPARENT means we own the drag handler and
- * resize grip ourselves (no native title bar / resize chrome), and certain
- * Linux compositors render TRANSPARENT poorly. UI configuration -- background
- * opacity, lock font size -- now lives in a right-click context menu rather
- * than a bottom controls bar.</p>
- *
- * <p>Design source for v1.0.0-1.0.2: {@code agent-reports/extension-team/channel-names-viewer/02_design.md}.
- * v1.0.3 ships against user-driven iteration rather than a re-spun design phase.</p>
+ * <p>v1.0.4 paints the rgba background on the root {@link StackPane} (rather
+ * than the inner content) so the entire rounded window surface is translucent.
+ * Edge/corner resize is detected on the scene with an 8 px hot-zone, removing
+ * the v1.0.3 corner grip. The opacity slider, lock-font checkbox, and reset
+ * sit in a right-click context menu.</p>
  *
  * <p>Key invariants enforced here:</p>
  * <ul>
- *   <li>Stage style: {@link StageStyle#TRANSPARENT}.</li>
- *   <li>Background: rounded {@code rgba(0, 0, 0, opacity)} where opacity is
- *       persisted via {@link ChannelNamesViewerPreferences#backgroundOpacityProperty()}.</li>
+ *   <li>Stage style: {@link StageStyle#TRANSPARENT}; scene fill TRANSPARENT.</li>
+ *   <li>Background: rounded {@code rgba(0, 0, 0, opacity)} painted on the root
+ *       StackPane (overrides modena's opaque {@code .root}); persisted via
+ *       {@link ChannelNamesViewerPreferences#backgroundOpacityProperty()}.</li>
  *   <li>Font size = either the locked value or
  *       {@code clamp((height - VERTICAL_OVERHEAD) / rowCount * ROW_HEIGHT_FACTOR, 10, 72)} pt.</li>
  *   <li>Min size 120 x 60 px.</li>
  *   <li>White-fallback rule: WCAG AA luminance contrast against the dark fill;
  *       channels that fall below render as white text.</li>
  *   <li>Esc / double-click closes; primary-press-and-drag on body moves;
- *       primary-press-and-drag on the corner grip resizes.</li>
+ *       primary-press-and-drag within {@link #EDGE_RESIZE_HOTSPOT_PX} of any
+ *       edge/corner resizes.</li>
  *   <li>Position/size/lock-state/locked-pt/opacity persistence on WINDOW_HIDDEN.</li>
  * </ul>
  */
@@ -92,8 +87,7 @@ public class ChannelLegendStage {
     private static final double ROW_HEIGHT_FACTOR = 0.7;
     /**
      * Vertical overhead px subtracted from stage height before computing per-row space.
-     * v1.0.3: TRANSPARENT stage has no native chrome, so overhead is just our own padding
-     * plus a tiny slack for the resize grip.
+     * TRANSPARENT stage has no native chrome, so overhead is just our own padding.
      */
     private static final double VERTICAL_OVERHEAD_PX = 30.0;
     public static final double MIN_WIDTH = 120.0;
@@ -116,13 +110,15 @@ public class ChannelLegendStage {
     private static final double DEFAULT_OPACITY = 0.75;
     /** Background-pane corner radius in px (matches the original Groovy script's `-fx-background-radius: 10`). */
     private static final int CORNER_RADIUS_PX = 10;
+    /** How close (in px) to an edge before the cursor turns into a resize affordance. */
+    private static final double EDGE_RESIZE_HOTSPOT_PX = 8.0;
 
     /** Empty-state text color (calm light gray, distinct from any channel color). */
     private static final Color EMPTY_STATE_COLOR = Color.rgb(180, 180, 180);
 
-    /** Window body tooltip. v1.0.3: drag-anywhere to move (no title bar). */
+    /** Window body tooltip. */
     private static final String BODY_TOOLTIP =
-            "Drag to move. Double-click to close. Right-click for settings.";
+            "Drag to move. Drag edges to resize. Double-click to close. Right-click for settings.";
 
     // ---- Empty-state subtitles ----
     private static final String EMPTY_HEADLINE = "No fluorescence channels";
@@ -136,12 +132,10 @@ public class ChannelLegendStage {
     // ---- Stage / scene plumbing ----
 
     private final Stage stage;
-    /** Root layout: content centered, resize grip overlaid in bottom-right. */
+    /** Root layout: paints the rounded translucent background; holds content. */
     private final StackPane root;
-    /** Container for channel labels (or empty-state labels). */
+    /** Container for channel labels (or empty-state labels). Always transparent. */
     private final VBox content;
-    /** Bottom-right corner grip used to resize the stage. */
-    private final Region resizeGrip;
     private final Scene scene;
 
     /** Number of rows currently rendered. Drives font binding. */
@@ -167,13 +161,21 @@ public class ChannelLegendStage {
     /** Drag-to-move offset accumulator. */
     private double dragOffsetX = 0;
     private double dragOffsetY = 0;
-    /** Resize-from-grip start values. */
+    /** Resize-from-edge start values. */
     private double resizeStartScreenX = 0;
     private double resizeStartScreenY = 0;
     private double resizeStartWidth = 0;
     private double resizeStartHeight = 0;
+    private double resizeStartStageX = 0;
+    private double resizeStartStageY = 0;
+    /** Edge currently used for active resize, or NONE while moving / idle. */
+    private ResizeEdge resizingFrom = ResizeEdge.NONE;
 
     public enum EmptyCause { RGB, NO_IMAGE, NO_SELECTION }
+
+    private enum ResizeEdge {
+        NONE, N, S, E, W, NE, NW, SE, SW
+    }
 
     public ChannelLegendStage(Stage owner) {
         this.stage = new Stage(StageStyle.TRANSPARENT);
@@ -193,27 +195,18 @@ public class ChannelLegendStage {
             logger.warn("Failed to read prefs; using defaults: {}", ex.getMessage());
         }
 
-        // Channel-list container.
+        // Channel-list container (transparent; root paints the background).
         this.content = new VBox();
         this.content.setAlignment(Pos.TOP_LEFT);
-        this.content.setPadding(new Insets(12, 18, 12, 12)); // extra right padding for the grip
-        Tooltip.install(this.content, new Tooltip(BODY_TOOLTIP));
+        this.content.setPadding(new Insets(12, 14, 12, 14));
+        this.content.setStyle("-fx-background-color: transparent;");
+        this.content.setMouseTransparent(false);
 
-        // Resize grip in the bottom-right corner.
-        this.resizeGrip = new Region();
-        this.resizeGrip.setPrefSize(14, 14);
-        this.resizeGrip.setMinSize(14, 14);
-        this.resizeGrip.setMaxSize(14, 14);
-        this.resizeGrip.setCursor(Cursor.SE_RESIZE);
-        this.resizeGrip.setStyle(
-                "-fx-background-color: rgba(180, 180, 180, 0.55);"
-                        + " -fx-background-radius: 0 0 " + CORNER_RADIUS_PX + " 0;");
-
-        // StackPane holds the rounded background, the content, and the grip overlay.
+        // StackPane root paints the rounded translucent background.
         this.root = new StackPane();
-        this.root.getChildren().addAll(this.content, this.resizeGrip);
+        this.root.getChildren().add(this.content);
         StackPane.setAlignment(this.content, Pos.TOP_LEFT);
-        StackPane.setAlignment(this.resizeGrip, Pos.BOTTOM_RIGHT);
+        Tooltip.install(this.root, new Tooltip(BODY_TOOLTIP));
 
         applyBackgroundCss();
         // Re-apply CSS whenever opacity changes so the user sees the slider live.
@@ -256,9 +249,10 @@ public class ChannelLegendStage {
 
     private void applyBackgroundCss() {
         double op = backgroundOpacity.get();
-        // Background lives on `content` so the rounded corners + opacity sit behind the labels.
-        this.content.setStyle(String.format(
-                "-fx-background-color: rgba(0, 0, 0, %.3f); -fx-background-radius: %d;",
+        // Inline style on root overrides modena's opaque .root background-color.
+        this.root.setStyle(String.format(
+                "-fx-background-color: rgba(0, 0, 0, %.3f); -fx-background-radius: %d;"
+                        + " -fx-background-insets: 0;",
                 op, CORNER_RADIUS_PX));
     }
 
@@ -303,6 +297,7 @@ public class ChannelLegendStage {
         for (ChannelRow row : rows) {
             Label label = new Label(row.name());
             label.setTextFill(textColorFor(row.color()));
+            label.setMouseTransparent(true); // clicks/drags fall through to scene handlers
             label.fontProperty().bind(Bindings.createObjectBinding(
                     () -> Font.font(clampedSize.get()),
                     clampedSize
@@ -319,6 +314,7 @@ public class ChannelLegendStage {
 
         Label headline = new Label(EMPTY_HEADLINE);
         headline.setTextFill(EMPTY_STATE_COLOR);
+        headline.setMouseTransparent(true);
         headline.fontProperty().bind(Bindings.createObjectBinding(
                 () -> Font.font(clampedSize.get()),
                 clampedSize
@@ -327,6 +323,7 @@ public class ChannelLegendStage {
         Label subtitle = new Label(subtitleFor(cause));
         subtitle.setTextFill(EMPTY_STATE_COLOR);
         subtitle.setWrapText(true);
+        subtitle.setMouseTransparent(true);
         subtitle.fontProperty().bind(Bindings.createObjectBinding(
                 () -> Font.font(Math.max(MIN_SUBTITLE_PT, clampedSize.get() * SUBTITLE_SCALE)),
                 clampedSize
@@ -374,57 +371,184 @@ public class ChannelLegendStage {
     }
 
     // ----------------------------------------------------------------------
-    // Key + mouse handlers (drag-to-move on body, drag-to-resize on grip)
+    // Key + mouse handlers
+    //
+    // All mouse logic lives on the scene: edge detection picks resize over
+    // move, double-click closes, right-click shows the settings menu. Labels
+    // inside `content` are mouse-transparent so events always reach here.
     // ----------------------------------------------------------------------
 
     private void installKeyAndMouseHandlers() {
-        // Esc closes.
-        EventHandler<KeyEvent> escFilter = e -> {
+        // Esc closes (filter so the stage gets it before any focused control consumes it).
+        scene.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
             if (e.getCode() == KeyCode.ESCAPE) {
                 hide();
                 e.consume();
             }
-        };
-        scene.addEventFilter(KeyEvent.KEY_PRESSED, escFilter);
+        });
 
-        // Double-click anywhere on the body closes the window.
-        content.setOnMouseClicked(e -> {
-            if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2) {
-                hide();
-                e.consume();
+        // Hover feedback: show resize cursor when within EDGE_RESIZE_HOTSPOT_PX of any edge.
+        scene.setOnMouseMoved(e -> {
+            if (resizingFrom != ResizeEdge.NONE) return;
+            scene.setCursor(cursorFor(detectEdge(e.getSceneX(), e.getSceneY())));
+        });
+        scene.setOnMouseExited(e -> {
+            if (resizingFrom == ResizeEdge.NONE) {
+                scene.setCursor(Cursor.DEFAULT);
             }
         });
 
-        // Drag-to-move: primary press on body captures the offset; drag updates stage X/Y.
-        // Modeled on the original Groovy script's MoveablePaneHandler.
-        content.setOnMousePressed(e -> {
+        scene.setOnMousePressed(e -> {
             if (e.getButton() != MouseButton.PRIMARY) return;
-            dragOffsetX = stage.getX() - e.getScreenX();
-            dragOffsetY = stage.getY() - e.getScreenY();
-        });
-        content.setOnMouseDragged(e -> {
-            if (e.getButton() != MouseButton.PRIMARY) return;
-            stage.setX(e.getScreenX() + dragOffsetX);
-            stage.setY(e.getScreenY() + dragOffsetY);
+            // Double-click anywhere closes the window.
+            if (e.getClickCount() == 2) {
+                hide();
+                e.consume();
+                return;
+            }
+            ResizeEdge edge = detectEdge(e.getSceneX(), e.getSceneY());
+            if (edge != ResizeEdge.NONE) {
+                resizingFrom = edge;
+                resizeStartScreenX = e.getScreenX();
+                resizeStartScreenY = e.getScreenY();
+                resizeStartWidth = stage.getWidth();
+                resizeStartHeight = stage.getHeight();
+                resizeStartStageX = stage.getX();
+                resizeStartStageY = stage.getY();
+                scene.setCursor(cursorFor(edge));
+            } else {
+                resizingFrom = ResizeEdge.NONE;
+                dragOffsetX = stage.getX() - e.getScreenX();
+                dragOffsetY = stage.getY() - e.getScreenY();
+            }
+            e.consume();
         });
 
-        // Drag-to-resize: primary press on the corner grip captures stage size + screen pos.
-        resizeGrip.setOnMousePressed(e -> {
+        scene.setOnMouseDragged(e -> {
             if (e.getButton() != MouseButton.PRIMARY) return;
-            resizeStartScreenX = e.getScreenX();
-            resizeStartScreenY = e.getScreenY();
-            resizeStartWidth = stage.getWidth();
-            resizeStartHeight = stage.getHeight();
+            if (resizingFrom != ResizeEdge.NONE) {
+                applyResize(e.getScreenX(), e.getScreenY());
+            } else {
+                stage.setX(e.getScreenX() + dragOffsetX);
+                stage.setY(e.getScreenY() + dragOffsetY);
+            }
             e.consume();
         });
-        resizeGrip.setOnMouseDragged(e -> {
-            if (e.getButton() != MouseButton.PRIMARY) return;
-            double newWidth = resizeStartWidth + (e.getScreenX() - resizeStartScreenX);
-            double newHeight = resizeStartHeight + (e.getScreenY() - resizeStartScreenY);
-            stage.setWidth(Math.max(MIN_WIDTH, newWidth));
-            stage.setHeight(Math.max(MIN_HEIGHT, newHeight));
+
+        scene.setOnMouseReleased(e -> {
+            if (resizingFrom != ResizeEdge.NONE) {
+                resizingFrom = ResizeEdge.NONE;
+                scene.setCursor(cursorFor(detectEdge(e.getSceneX(), e.getSceneY())));
+            }
+        });
+
+        // Right-click anywhere on the window opens the settings menu.
+        scene.setOnContextMenuRequested(e -> {
+            ContextMenu menu = buildSettingsMenu();
+            menu.show(root, e.getScreenX(), e.getScreenY());
             e.consume();
         });
+    }
+
+    private ResizeEdge detectEdge(double sceneX, double sceneY) {
+        double w = scene.getWidth();
+        double h = scene.getHeight();
+        boolean onLeft = sceneX <= EDGE_RESIZE_HOTSPOT_PX;
+        boolean onRight = sceneX >= w - EDGE_RESIZE_HOTSPOT_PX;
+        boolean onTop = sceneY <= EDGE_RESIZE_HOTSPOT_PX;
+        boolean onBottom = sceneY >= h - EDGE_RESIZE_HOTSPOT_PX;
+        if (onTop && onLeft) return ResizeEdge.NW;
+        if (onTop && onRight) return ResizeEdge.NE;
+        if (onBottom && onLeft) return ResizeEdge.SW;
+        if (onBottom && onRight) return ResizeEdge.SE;
+        if (onTop) return ResizeEdge.N;
+        if (onBottom) return ResizeEdge.S;
+        if (onLeft) return ResizeEdge.W;
+        if (onRight) return ResizeEdge.E;
+        return ResizeEdge.NONE;
+    }
+
+    private static Cursor cursorFor(ResizeEdge edge) {
+        switch (edge) {
+            case N:  return Cursor.N_RESIZE;
+            case S:  return Cursor.S_RESIZE;
+            case E:  return Cursor.E_RESIZE;
+            case W:  return Cursor.W_RESIZE;
+            case NE: return Cursor.NE_RESIZE;
+            case NW: return Cursor.NW_RESIZE;
+            case SE: return Cursor.SE_RESIZE;
+            case SW: return Cursor.SW_RESIZE;
+            default: return Cursor.DEFAULT;
+        }
+    }
+
+    private void applyResize(double screenX, double screenY) {
+        double dx = screenX - resizeStartScreenX;
+        double dy = screenY - resizeStartScreenY;
+        double newW = resizeStartWidth;
+        double newH = resizeStartHeight;
+        double newX = resizeStartStageX;
+        double newY = resizeStartStageY;
+        switch (resizingFrom) {
+            case N:
+                newH = resizeStartHeight - dy;
+                newY = resizeStartStageY + dy;
+                break;
+            case S:
+                newH = resizeStartHeight + dy;
+                break;
+            case E:
+                newW = resizeStartWidth + dx;
+                break;
+            case W:
+                newW = resizeStartWidth - dx;
+                newX = resizeStartStageX + dx;
+                break;
+            case NE:
+                newW = resizeStartWidth + dx;
+                newH = resizeStartHeight - dy;
+                newY = resizeStartStageY + dy;
+                break;
+            case NW:
+                newW = resizeStartWidth - dx;
+                newX = resizeStartStageX + dx;
+                newH = resizeStartHeight - dy;
+                newY = resizeStartStageY + dy;
+                break;
+            case SE:
+                newW = resizeStartWidth + dx;
+                newH = resizeStartHeight + dy;
+                break;
+            case SW:
+                newW = resizeStartWidth - dx;
+                newX = resizeStartStageX + dx;
+                newH = resizeStartHeight + dy;
+                break;
+            default:
+                return;
+        }
+        // Clamp to MIN_WIDTH/HEIGHT. If a left/top-anchored resize hits the floor,
+        // pin the stage origin so the right/bottom edge stays under the cursor.
+        if (newW < MIN_WIDTH) {
+            if (resizingFrom == ResizeEdge.W
+                    || resizingFrom == ResizeEdge.NW
+                    || resizingFrom == ResizeEdge.SW) {
+                newX = resizeStartStageX + (resizeStartWidth - MIN_WIDTH);
+            }
+            newW = MIN_WIDTH;
+        }
+        if (newH < MIN_HEIGHT) {
+            if (resizingFrom == ResizeEdge.N
+                    || resizingFrom == ResizeEdge.NE
+                    || resizingFrom == ResizeEdge.NW) {
+                newY = resizeStartStageY + (resizeStartHeight - MIN_HEIGHT);
+            }
+            newH = MIN_HEIGHT;
+        }
+        stage.setX(newX);
+        stage.setY(newY);
+        stage.setWidth(newW);
+        stage.setHeight(newH);
     }
 
     // ----------------------------------------------------------------------
@@ -611,13 +735,13 @@ public class ChannelLegendStage {
         return menu;
     }
 
-    /** Install a right-click handler on the legend window body that shows the settings menu. */
+    /**
+     * Retained for source compatibility with the v1.0.3 extension wiring.
+     * The right-click handler is now installed unconditionally in the
+     * constructor on the scene, so this method is a no-op.
+     */
     public void installContextMenuOnBody() {
-        content.setOnContextMenuRequested(e -> {
-            ContextMenu menu = buildSettingsMenu();
-            menu.show(content, e.getScreenX(), e.getScreenY());
-            e.consume();
-        });
+        // No-op: scene-level handler installed in installKeyAndMouseHandlers().
     }
 
     // ----------------------------------------------------------------------
