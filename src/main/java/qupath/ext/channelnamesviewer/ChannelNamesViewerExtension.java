@@ -165,12 +165,17 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
         if (legendStage.isShowing()) {
             legendStage.hide();
         } else {
-            controller.install();
+            controller.install(); // populates content via renderChannels / renderEmptyState
+            // v1.0.2: when the font is NOT locked, ignore any saved geometry and
+            // size the window fresh from the current channel set + QuPath's
+            // "Location text font size" preference. When the font IS locked,
+            // the stage's applyFirstShowGeometry restores the saved geometry.
+            boolean unlocked = !ChannelNamesViewerPreferences.getFontLocked();
+            if (unlocked) {
+                legendStage.applyDefaultGeometryIfUnlocked();
+            }
             legendStage.show();
-            // First-show may have left geometry up to caller; ensure auto-fit
-            // and centered when prefs were sentinels.
-            if (ChannelNamesViewerPreferences.isSentinelGeometry()) {
-                legendStage.getStage().sizeToScene();
+            if (unlocked) {
                 centerOnMainStage(qupath);
             }
         }

@@ -27,13 +27,16 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
+import javafx.scene.text.Text;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.channelnamesviewer.preferences.ChannelNamesViewerPreferences;
+import qupath.lib.gui.prefs.PathPrefs;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -153,6 +156,10 @@ public class ChannelLegendStage {
 
     /** Number of rows currently rendered (channels in selection, or 2 for empty state). Drives font binding. */
     private final IntegerProperty rowCount = new SimpleIntegerProperty(1);
+    /** The most recently rendered channel rows (used by {@link #applyDefaultGeometryIfUnlocked()} to size the window). */
+    private List<ChannelRow> lastRows = Collections.emptyList();
+    /** Whether the most recent render was the empty-state (vs. a list of channels). */
+    private boolean lastWasEmpty = false;
     /** Whether the font size is locked at {@link #lockedFontPt}. */
     private final BooleanProperty fontLocked = new SimpleBooleanProperty(false);
     /** The locked font size (pt). Captured at lock time; kept across sessions. */
@@ -331,6 +338,8 @@ public class ChannelLegendStage {
         }
         // Update row count so dynamicSize recomputes the per-row font.
         rowCount.set(rows.size());
+        lastRows = List.copyOf(rows);
+        lastWasEmpty = false;
         for (ChannelRow row : rows) {
             Label label = new Label(row.name());
             label.setTextFill(textColorFor(row.color()));
@@ -353,6 +362,8 @@ public class ChannelLegendStage {
         // Empty state has 2 effective rows (headline + smaller subtitle); count both
         // so the dynamic font binding leaves room for the subtitle below the headline.
         rowCount.set(2);
+        lastRows = Collections.emptyList();
+        lastWasEmpty = true;
         Label headline = new Label(EMPTY_HEADLINE);
         headline.setTextFill(EMPTY_STATE_COLOR);
         headline.fontProperty().bind(Bindings.createObjectBinding(
@@ -485,6 +496,15 @@ public class ChannelLegendStage {
     }
 
     private void applyFirstShowGeometry() {
+        // v1.0.2: only restore geometry when the user has the font locked.
+        // Unlocked sessions get fresh defaults computed from the current channel
+        // set + QuPath's "Location text font size" preference (see
+        // {@link #applyDefaultGeometryIfUnlocked()}).
+        if (!fontLocked.get()) {
+            logger.debug("Font is unlocked; skipping prefs-based geometry restore "
+                    + "(caller will apply default geometry instead)");
+            return;
+        }
         double savedX, savedY, savedW, savedH;
         try {
             savedX = ChannelNamesViewerPreferences.getWindowX();
@@ -530,6 +550,93 @@ public class ChannelLegendStage {
         stage.setWidth(w);
         stage.setHeight(h);
         logger.debug("Restored window geometry from prefs: x={}, y={}, w={}, h={}", savedX, savedY, w, h);
+    }
+
+    // ----------------------------------------------------------------------
+    // Default geometry (v1.0.2)
+    // ----------------------------------------------------------------------
+
+    /**
+     * Size the window to fit the most recently rendered content at QuPath's
+     * "Location text font size" preference. No-op when the user has the font
+     * locked: in that case the prefs-restored geometry stands.
+     *
+     * <p>Width = longest channel name's pixel width at the chosen font + horizontal padding.
+     * Height = rowCount * (font / ROW_HEIGHT_FACTOR) + VERTICAL_OVERHEAD_PX.
+     * Both clamped to the floor MIN_WIDTH/MIN_HEIGHT and to primary screen visual bounds.</p>
+     *
+     * <p>Caller (extension's toggleLegend) invokes this after
+     * {@code controller.install()} populates the content via renderChannels /
+     * renderEmptyState, so that {@link #lastRows} / {@link #lastWasEmpty} are
+     * current.</p>
+     */
+    public void applyDefaultGeometryIfUnlocked() {
+        if (fontLocked.get()) {
+            return;
+        }
+        double pt = defaultFontPt();
+        int n;
+        double maxTextWidth;
+        if (lastWasEmpty) {
+            // Empty state: headline + the longest of the three subtitle variants.
+            n = 2;
+            maxTextWidth = measureTextWidth(EMPTY_HEADLINE, pt);
+            double subtitlePt = Math.max(MIN_SUBTITLE_PT, pt * SUBTITLE_SCALE);
+            for (String subtitle : List.of(
+                    EMPTY_SUBTITLE_RGB, EMPTY_SUBTITLE_NO_IMAGE, EMPTY_SUBTITLE_NO_SELECTION)) {
+                maxTextWidth = Math.max(maxTextWidth, measureTextWidth(subtitle, subtitlePt));
+            }
+        } else {
+            n = Math.max(lastRows.size(), 1);
+            maxTextWidth = 0;
+            for (ChannelRow row : lastRows) {
+                maxTextWidth = Math.max(maxTextWidth, measureTextWidth(row.name(), pt));
+            }
+        }
+
+        // Horizontal: text width + VBox padding (24) + chrome slack (24).
+        double targetWidth = maxTextWidth + 48;
+        // Vertical: invert the dynamicSize formula so the resulting font binding lands on pt.
+        // dynamicSize = clamp((height - VERTICAL_OVERHEAD_PX) / rows * ROW_HEIGHT_FACTOR, ...)
+        // -> for dynamicSize == pt: height = pt / ROW_HEIGHT_FACTOR * rows + VERTICAL_OVERHEAD_PX
+        double targetHeight = (pt / ROW_HEIGHT_FACTOR) * n + VERTICAL_OVERHEAD_PX;
+
+        // Clamp to floors and primary screen.
+        Rectangle2D primary = Screen.getPrimary().getVisualBounds();
+        targetWidth = Math.max(MIN_WIDTH, Math.min(targetWidth, primary.getWidth() - 100));
+        targetHeight = Math.max(MIN_HEIGHT, Math.min(targetHeight, primary.getHeight() - 100));
+
+        stage.setWidth(targetWidth);
+        stage.setHeight(targetHeight);
+        logger.debug("Applied default geometry (unlocked): pt={}, rows={}, w={}, h={}",
+                pt, n, targetWidth, targetHeight);
+    }
+
+    /**
+     * Map QuPath's {@code Location text font size} preference (TINY/SMALL/MEDIUM/LARGE/HUGE)
+     * to a concrete pt value suitable for the legend window. Falls back to 14 pt if the
+     * preference is unavailable (e.g. test harness without QuPath GUI initialised).
+     */
+    private static double defaultFontPt() {
+        try {
+            switch (PathPrefs.locationFontSizeProperty().get()) {
+                case TINY: return 10.0;
+                case SMALL: return 12.0;
+                case MEDIUM: return 14.0;
+                case LARGE: return 18.0;
+                case HUGE: return 24.0;
+                default: return 14.0;
+            }
+        } catch (Exception ex) {
+            return 14.0;
+        }
+    }
+
+    /** Pixel width of {@code text} when rendered in the JavaFX default font family at {@code pt}. */
+    private static double measureTextWidth(String text, double pt) {
+        Text measure = new Text(text);
+        measure.setFont(Font.font(pt));
+        return measure.getLayoutBounds().getWidth();
     }
 
     // ----------------------------------------------------------------------
