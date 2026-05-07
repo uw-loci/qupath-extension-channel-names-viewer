@@ -20,7 +20,7 @@ For v1.0 the extension is distributed as a single jar:
 1. Download `qupath-extension-channel-names-viewer-{version}-all.jar` from the [Releases page](https://github.com/uw-loci/qupath-extension-channel-names-viewer/releases).
 2. Drag the jar onto a running QuPath window.
 3. When QuPath asks whether to copy the jar into your extensions folder, accept.
-4. Restart QuPath.
+4. **Restart QuPath.** This step is required — QuPath copies the jar but does not load new extensions on the fly, so the toolbar button, menu entry, and keyboard shortcut will not appear until QuPath is fully restarted.
 
 After restart you will see the new toolbar button next to QuPath's brightness/contrast button, a new menu entry under **Extensions > Channel Names Viewer...**, and the keyboard shortcut `Ctrl+Shift+C` (`Cmd+Shift+C` on macOS) ready to open the legend.
 

@@ -1,5 +1,6 @@
 package qupath.ext.channelnamesviewer.preferences;
 
+import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +34,10 @@ public final class ChannelNamesViewerPreferences {
     private static DoubleProperty windowYProperty;
     private static DoubleProperty windowWidthProperty;
     private static DoubleProperty windowHeightProperty;
+    /** Whether the user has locked the font size (v1.0.1+). */
+    private static BooleanProperty fontLockedProperty;
+    /** Locked font size in pt; only meaningful when {@link #fontLockedProperty} is true (v1.0.1+). */
+    private static DoubleProperty lockedFontPtProperty;
 
     private static volatile boolean installed = false;
 
@@ -58,6 +63,10 @@ public final class ChannelNamesViewerPreferences {
                 PREFIX + "windowWidth", SENTINEL);
         windowHeightProperty = PathPrefs.createPersistentPreference(
                 PREFIX + "windowHeight", SENTINEL);
+        fontLockedProperty = PathPrefs.createPersistentPreference(
+                PREFIX + "fontLocked", false);
+        lockedFontPtProperty = PathPrefs.createPersistentPreference(
+                PREFIX + "lockedFontPt", 20.0);
 
         installed = true;
         logger.info("Channel Names Viewer preferences installed");
@@ -160,6 +169,24 @@ public final class ChannelNamesViewerPreferences {
         windowYProperty.set(SENTINEL);
         windowWidthProperty.set(SENTINEL);
         windowHeightProperty.set(SENTINEL);
+    }
+
+    public static boolean getFontLocked() {
+        return fontLockedProperty != null && fontLockedProperty.get();
+    }
+
+    public static void setFontLocked(boolean v) {
+        ensureInstalled();
+        fontLockedProperty.set(v);
+    }
+
+    public static double getLockedFontPt() {
+        return lockedFontPtProperty != null ? lockedFontPtProperty.get() : 20.0;
+    }
+
+    public static void setLockedFontPt(double v) {
+        ensureInstalled();
+        lockedFontPtProperty.set(v);
     }
 
     private static void ensureInstalled() {

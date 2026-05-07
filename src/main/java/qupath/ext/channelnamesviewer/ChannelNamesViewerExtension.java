@@ -15,6 +15,7 @@ import qupath.ext.channelnamesviewer.preferences.ChannelNamesViewerPreferences;
 import qupath.ext.channelnamesviewer.ui.ChannelLegendStage;
 import qupath.lib.common.Version;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.gui.actions.ActionTools;
 import qupath.lib.gui.actions.CommonActions;
 import qupath.lib.gui.extensions.GitHubProject;
 import qupath.lib.gui.extensions.QuPathExtension;
@@ -57,9 +58,6 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
 
     /** Default accelerator: Cmd+Shift+C / Ctrl+Shift+C. */
     private static final String ACCELERATOR_COMBO = "shortcut+shift+c";
-
-    /** ControlsFX action property key used by QuPath's toolbar buttons. */
-    private static final String CONTROLSFX_ACTIONS_ACTION = "controlsfx.actions.action";
 
     private boolean installed = false;
 
@@ -133,7 +131,11 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
                 logger.warn("Accelerator {} appears to be in use by {}; binding anyway",
                         ACCELERATOR_COMBO, existing);
             }
-            menuItem.setAccelerator(combo);
+            // Use QuPath's setAccelerator so the keystroke is plumbed into the
+            // main scene via registerAccelerator(action). Calling
+            // MenuItem.setAccelerator directly only works when the menu is in
+            // the menu bar; for nested submenus the keystroke never fires.
+            qupath.setAccelerator(menuItem, combo);
             logger.info("Bound accelerator {} to menu item", ACCELERATOR_COMBO);
         } catch (Exception ex) {
             logger.warn("Failed to bind accelerator {}: {}", ACCELERATOR_COMBO, ex.getMessage());
@@ -277,8 +279,11 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
 
     /**
      * Walk the toolbar and return the index of the {@link ButtonBase} whose
-     * {@code controlsfx.actions.action} property matches {@code action}.
-     * Returns -1 if not found.
+     * stored Action matches {@code action}. QuPath stores the action under
+     * {@link ActionTools#getActionProperty(Node)} (the property key
+     * {@code "qupath.lib.gui.actions.ActionTools"}), not under the raw
+     * ControlsFX key the v1.0.0 design originally assumed. Returns -1 if not
+     * found.
      */
     private static int findActionButtonIndex(ToolBar toolBar, Action action) {
         var items = toolBar.getItems();
@@ -287,8 +292,7 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
             if (b == null) {
                 continue;
             }
-            Object stored = b.getProperties().get(CONTROLSFX_ACTIONS_ACTION);
-            if (stored == action) {
+            if (ActionTools.getActionProperty(b) == action) {
                 return i;
             }
         }

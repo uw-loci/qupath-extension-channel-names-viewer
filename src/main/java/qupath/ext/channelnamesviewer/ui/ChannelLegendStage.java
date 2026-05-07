@@ -2,11 +2,18 @@ package qupath.ext.channelnamesviewer.ui;
 
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.DoubleBinding;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleDoubleProperty;
+import javafx.beans.property.SimpleIntegerProperty;
 import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Scene;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
@@ -14,7 +21,9 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.Background;
 import javafx.scene.layout.BackgroundFill;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.CornerRadii;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
@@ -73,8 +82,19 @@ public class ChannelLegendStage {
     private static final double MIN_FONT_PT = 10.0;
     /** Ceiling for the dynamic font-size binding (pt). Above this, even on 4K the window fills the screen. */
     private static final double MAX_FONT_PT = 72.0;
-    /** Divisor in fontSize = min(width, height) / FONT_DIVISOR. Tuned so a ~150x150 window yields ~18-19 pt. */
-    private static final double FONT_DIVISOR = 8.0;
+    /**
+     * Multiplier on per-row height when computing dynamic font size. With 1.0 the font matches the
+     * full row height; values < 1 leave breathing room between rows. 0.7 yields rows that look
+     * comfortable with default JavaFX line metrics (~1.2 line spacing).
+     * <p>v1.0.0 used min(width, height) / 8 (aspect-fit). User feedback: it should track height
+     * and channel count so all channel names are visible at once. v1.0.1 reworks accordingly.
+     */
+    private static final double ROW_HEIGHT_FACTOR = 0.7;
+    /**
+     * Vertical overhead in pixels subtracted from stage height when computing per-row space.
+     * Accounts for UTILITY title bar, content padding, and the lock-font controls bar.
+     */
+    private static final double VERTICAL_OVERHEAD_PX = 90.0;
     /** Minimum window width (px). Floor for native UTILITY chrome to prevent dragging to 0x0. */
     public static final double MIN_WIDTH = 120.0;
     /** Minimum window height (px). */
@@ -121,10 +141,25 @@ public class ChannelLegendStage {
     // ---- Stage / scene plumbing ----
 
     private final Stage stage;
+    /** Root layout: channelsBox in center, controlsBar at bottom. */
+    private final BorderPane root;
+    /** Container for channel-name labels (or empty-state labels). */
     private final VBox content;
+    /** Bottom strip holding the lock-font checkbox. */
+    private final HBox controlsBar;
+    /** Lock-font-size toggle. Persisted across sessions. */
+    private final CheckBox lockCheckbox;
     private final Scene scene;
 
-    /** Current dynamic font size (pt). Bound to {@code clamp(min(w,h)/divisor, min, max)}. */
+    /** Number of rows currently rendered (channels in selection, or 2 for empty state). Drives font binding. */
+    private final IntegerProperty rowCount = new SimpleIntegerProperty(1);
+    /** Whether the font size is locked at {@link #lockedFontPt}. */
+    private final BooleanProperty fontLocked = new SimpleBooleanProperty(false);
+    /** The locked font size (pt). Captured at lock time; kept across sessions. */
+    private final DoubleProperty lockedFontPt = new SimpleDoubleProperty(20.0);
+    /** Dynamic font size derived from height + rowCount, clamped 10-72 pt. */
+    private final DoubleBinding dynamicSize;
+    /** Effective font size: {@code lockedFontPt} when locked, else {@code dynamicSize}. Labels bind to this. */
     private final DoubleBinding clampedSize;
 
     /** Set true after the first {@link #show()} call so we don't re-apply restore-from-prefs every show. */
@@ -159,35 +194,81 @@ public class ChannelLegendStage {
         this.stage.setMinHeight(MIN_HEIGHT);
         this.stage.setAlwaysOnTop(false); // Pin-to-top is a v1.1 nice-to-have.
 
+        // Restore lock state from prefs; default false / 20 pt.
+        try {
+            this.fontLocked.set(ChannelNamesViewerPreferences.getFontLocked());
+            this.lockedFontPt.set(ChannelNamesViewerPreferences.getLockedFontPt());
+        } catch (Exception ex) {
+            logger.warn("Failed to read font-lock prefs; using defaults: {}", ex.getMessage());
+        }
+
         this.content = new VBox();
-        this.content.setAlignment(Pos.CENTER_LEFT);
-        this.content.setPadding(new Insets(12, 12, 12, 12));
+        this.content.setAlignment(Pos.TOP_LEFT);
+        this.content.setPadding(new Insets(12, 12, 6, 12));
         this.content.setBackground(new Background(new BackgroundFill(
                 BACKGROUND_COLOR, CornerRadii.EMPTY, Insets.EMPTY)));
 
-        this.scene = new Scene(this.content);
+        // Bottom strip for the lock-font-size checkbox. Same dark background as the body
+        // so the window reads as a single surface despite the BorderPane split.
+        this.lockCheckbox = new CheckBox("Lock font size");
+        this.lockCheckbox.setSelected(this.fontLocked.get());
+        this.lockCheckbox.setTextFill(EMPTY_STATE_COLOR);
+        this.lockCheckbox.setStyle("-fx-text-fill: rgb(180, 180, 180);");
+        this.lockCheckbox.setTooltip(new Tooltip(
+                "When checked, the font size stays fixed at the current value -- useful for "
+                        + "taking screenshots with a consistent legend size across images with "
+                        + "different channel counts."));
+        this.controlsBar = new HBox(this.lockCheckbox);
+        this.controlsBar.setAlignment(Pos.CENTER_LEFT);
+        this.controlsBar.setPadding(new Insets(2, 12, 6, 12));
+        this.controlsBar.setBackground(new Background(new BackgroundFill(
+                BACKGROUND_COLOR, CornerRadii.EMPTY, Insets.EMPTY)));
+
+        this.root = new BorderPane();
+        this.root.setCenter(this.content);
+        this.root.setBottom(this.controlsBar);
+        this.root.setBackground(new Background(new BackgroundFill(
+                BACKGROUND_COLOR, CornerRadii.EMPTY, Insets.EMPTY)));
+
+        this.scene = new Scene(this.root);
         // Match window background even before first content fill, for cleaner first paint.
         this.scene.setFill(BACKGROUND_COLOR);
         this.stage.setScene(this.scene);
 
-        // Body tooltip lives on the root VBox so any hover (even on padding) reveals it.
+        // Body tooltip lives on the content VBox so any hover (even on padding) reveals it.
         Tooltip.install(this.content, new Tooltip(BODY_TOOLTIP));
 
-        // Build the font-size binding once; per-Label fontProperty bindings reference clampedSize.
-        // Note: Bindings.min(...).divide(double) returns NumberBinding -- wrap via createDoubleBinding
-        // to land in DoubleBinding territory.
-        var minDim = Bindings.min(
-                this.stage.widthProperty(),
-                this.stage.heightProperty()
+        // Dynamic font size: scale per-row height with stage height divided by rowCount.
+        // Clamped 10-72 pt. v1.0.1 reworks the formula from min(width, height)/8 (aspect-fit)
+        // to height-driven-by-row-count so all channel names can be visible at once and
+        // pulling the window taller scales the legend up.
+        this.dynamicSize = Bindings.createDoubleBinding(
+                () -> {
+                    double avail = this.stage.getHeight() - VERTICAL_OVERHEAD_PX;
+                    if (avail <= 0) return MIN_FONT_PT;
+                    int rows = Math.max(rowCount.get(), 1);
+                    double raw = (avail / rows) * ROW_HEIGHT_FACTOR;
+                    return Math.max(MIN_FONT_PT, Math.min(MAX_FONT_PT, raw));
+                },
+                this.stage.heightProperty(),
+                rowCount
         );
-        DoubleBinding rawSize = Bindings.createDoubleBinding(
-                () -> minDim.doubleValue() / FONT_DIVISOR,
-                minDim
-        );
+
+        // Effective font size: locked value if user has clicked the checkbox, else dynamicSize.
         this.clampedSize = Bindings.createDoubleBinding(
-                () -> Math.max(MIN_FONT_PT, Math.min(MAX_FONT_PT, rawSize.get())),
-                rawSize
+                () -> fontLocked.get() ? lockedFontPt.get() : dynamicSize.get(),
+                fontLocked, lockedFontPt, dynamicSize
         );
+
+        // Wire the checkbox to the locked-font properties.
+        // - Lock: capture current dynamicSize as the locked value, then enable lock.
+        // - Unlock: just disable; dynamicSize takes over again.
+        this.lockCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal) {
+                this.lockedFontPt.set(this.dynamicSize.get());
+            }
+            this.fontLocked.set(newVal);
+        });
 
         installKeyAndMouseHandlers();
         installPersistenceHooks();
@@ -248,6 +329,8 @@ public class ChannelLegendStage {
             renderEmptyState(EmptyCause.NO_SELECTION);
             return;
         }
+        // Update row count so dynamicSize recomputes the per-row font.
+        rowCount.set(rows.size());
         for (ChannelRow row : rows) {
             Label label = new Label(row.name());
             label.setTextFill(textColorFor(row.color()));
@@ -267,6 +350,9 @@ public class ChannelLegendStage {
      */
     public void renderEmptyState(EmptyCause cause) {
         content.getChildren().clear();
+        // Empty state has 2 effective rows (headline + smaller subtitle); count both
+        // so the dynamic font binding leaves room for the subtitle below the headline.
+        rowCount.set(2);
         Label headline = new Label(EMPTY_HEADLINE);
         headline.setTextFill(EMPTY_STATE_COLOR);
         headline.fontProperty().bind(Bindings.createObjectBinding(
@@ -387,8 +473,11 @@ public class ChannelLegendStage {
             ChannelNamesViewerPreferences.setWindowY(stage.getY());
             ChannelNamesViewerPreferences.setWindowWidth(stage.getWidth());
             ChannelNamesViewerPreferences.setWindowHeight(stage.getHeight());
-            logger.debug("Saved window geometry: x={}, y={}, w={}, h={}",
-                    stage.getX(), stage.getY(), stage.getWidth(), stage.getHeight());
+            ChannelNamesViewerPreferences.setFontLocked(fontLocked.get());
+            ChannelNamesViewerPreferences.setLockedFontPt(lockedFontPt.get());
+            logger.debug("Saved window geometry: x={}, y={}, w={}, h={}, fontLocked={}, lockedPt={}",
+                    stage.getX(), stage.getY(), stage.getWidth(), stage.getHeight(),
+                    fontLocked.get(), lockedFontPt.get());
         } catch (Exception ex) {
             // Defensive: if prefs aren't installed yet (e.g. test harness), don't crash hide().
             logger.warn("Failed to save window position: {}", ex.getMessage());
