@@ -1,12 +1,20 @@
 package qupath.ext.channelnamesviewer;
 
 import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.ButtonBase;
+import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ToolBar;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCombination;
+import javafx.scene.layout.StackPane;
+import javafx.scene.shape.ClosePath;
+import javafx.scene.shape.LineTo;
+import javafx.scene.shape.MoveTo;
+import javafx.scene.shape.Path;
 import org.controlsfx.control.action.Action;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -323,12 +331,35 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
 
     private ButtonBase buildToolbarButton(QuPathGUI qupath) {
         // Plain text glyph -- no font dependency. The button's tooltip carries the action language.
-        javafx.scene.control.Button button = new javafx.scene.control.Button("Ch");
+        javafx.scene.control.Button button = new javafx.scene.control.Button();
         button.setTooltip(new Tooltip(resources.getString("tooltip.toolbar")));
         button.setAccessibleText(resources.getString("tooltip.toolbar"));
         button.setOnAction(e -> toggleLegend(qupath));
         // Match QuPath's existing toolbar button sizing.
         button.getStyleClass().add("toolbar-button");
+
+        // Graphic = "Ch" centered + small right-pointing triangle in the bottom-right
+        // corner indicating that right-click reveals additional options. Mirrors the
+        // ContextMenu decoration QuPath uses on its line/polyline tool button.
+        Label chLabel = new Label("Ch");
+        chLabel.setMouseTransparent(true);
+        chLabel.textFillProperty().bind(button.textFillProperty());
+
+        Path indicator = new Path(
+                new MoveTo(0, 0),
+                new LineTo(0, 5),
+                new LineTo(5, 2.5),
+                new ClosePath());
+        indicator.setStroke(null);
+        indicator.setOpacity(0.55);
+        indicator.setMouseTransparent(true);
+        indicator.fillProperty().bind(button.textFillProperty());
+
+        StackPane buttonGraphic = new StackPane(chLabel, indicator);
+        StackPane.setAlignment(chLabel, Pos.CENTER);
+        StackPane.setAlignment(indicator, Pos.BOTTOM_RIGHT);
+        StackPane.setMargin(indicator, new Insets(0, 1, 1, 0));
+        button.setGraphic(buttonGraphic);
         // Right-click on the toolbar button opens the legend window's settings menu
         // (background opacity slider, lock-font toggle, reset). Built lazily so the
         // legend stage exists by the time the menu is requested.

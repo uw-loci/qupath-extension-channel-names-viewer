@@ -29,34 +29,41 @@ After restart you will see the new toolbar button next to QuPath's brightness/co
 ## Quick start
 
 1. Open a multiplex / fluorescence image in QuPath.
-2. Open the legend with any of the three launch surfaces: click the toolbar button next to brightness/contrast, choose **Extensions > Channel Names Viewer...**, or press **Ctrl+Shift+C** (`Cmd+Shift+C` on macOS).
+2. Open the legend with any of the three launch surfaces: click the toolbar button (labeled `Ch`, with a small triangle in the bottom-right corner indicating an extra menu) next to brightness/contrast, choose **Extensions > Channel Names Viewer...**, or press **Ctrl+Shift+C** (`Cmd+Shift+C` on macOS).
 3. The legend lists the currently-selected channels, each name drawn in its display color.
-4. Drag the title bar to move; drag any edge or corner to resize (the text scales with the window). Double-click the body or press the shortcut again to close.
+4. **Move:** drag the body. **Resize:** drag any edge or corner (the cursor changes within ~8 px of an edge). **Close:** double-click the body, press the shortcut again, or press Esc. **Settings:** right-click the body or the toolbar button for a menu with background opacity and a lock-font-size toggle.
 
 ---
 
 ## Key concepts
 
 - **Selected channels.** The window mirrors what brightness/contrast calls *selected*. Toggle a channel there and the legend updates immediately.
-- **Color coding.** Channel names are drawn in their display colors. A luminance check switches very dark channels to white so they stay readable on the dark window background.
-- **Resize-with-text.** No font-size control. Drag a corner. Pull large for a projector, shrink for a laptop. Font size is clamped to a comfortable minimum and a sensible maximum.
+- **Color coding.** Channel names are drawn in their display colors. A WCAG luminance check switches very dark channels to white so they stay readable on the dark window background.
+- **Resize-with-text.** No font-size control by default. Drag any edge or corner — text scales with the window. If you want a fixed size (e.g. matched screenshots across different channel counts), use **Lock font size** in the right-click menu.
+- **Right-click for settings.** The window has no chrome and no controls bar. Right-click the toolbar button (without opening the window), or right-click the window body, to access background opacity, lock-font, and reset-opacity.
 - **Image switching.** Open a different image and the legend rebinds automatically. RGB / brightfield images render an empty-state placeholder rather than a crash.
 
 ---
 
 ## Coexistence with the original Groovy script
 
-This extension does not replace [Sara McArdle's `FluorescentChannelNames.groovy`](https://github.com/saramcardle/Image-Analysis-Scripts/blob/master/QuPath%20Groovy%20Scripts/FluorescentChannelNames.groovy). Both can be installed at once — they create independent JavaFX windows and do not conflict. Keep using the script if you have customized it or wired it into automation; otherwise the extension adds discoverability (toolbar / menu / shortcut), resize-with-text scaling, clean rebinding on image switch, an RGB empty state, listener cleanup, and persisted position/size. Both can be installed at once and they do not share or collide on keyboard shortcuts — Sara's script does not register a global accelerator at all, so `Cmd/Ctrl+Shift+C` is exclusive to the extension. Full discussion in the [user guide](docs/user-guide.md).
+This extension does not replace [Sara McArdle's `FluorescentChannelNames.groovy`](https://github.com/saramcardle/Image-Analysis-Scripts/blob/master/QuPath%20Groovy%20Scripts/FluorescentChannelNames.groovy). Both can be installed at once — they create independent JavaFX windows and do not conflict. Keep using the script if you have customized it or wired it into automation; otherwise the extension adds discoverability (toolbar / menu / shortcut), resize-with-text scaling, clean rebinding on image switch, an RGB empty state, listener cleanup, persisted position/size/opacity/lock-state, and a right-click settings menu. Sara's script does not register a global accelerator at all, so `Cmd/Ctrl+Shift+C` is exclusive to the extension. Full discussion in the [user guide](docs/user-guide.md).
 
 ---
 
-## What's new in v1.0
+## What's new
 
-First release. Notable choices for v1.0:
+**v1.0.4** — Real translucent background (the rgba slider was being layered over an opaque pane in v1.0.3, so it only darkened the gray rather than letting the desktop show through). Edge and corner resize on all eight sides; the corner grip indicator was removed.
 
-- Window position and size **are** persisted across QuPath restarts.
-- The window uses `StageStyle.UTILITY` on every platform — a thin native title bar for dragging and native edge/corner resize handles, on top of a solid near-black background. Sara's original script used a transparent stage; we traded a small aesthetic difference for free, robust resize and move on every platform.
-- Toolbar button placement is best-effort; if QuPath reorganizes its toolbar in a future release the menu item and keyboard shortcut continue to work.
+**v1.0.3** — Switched the window to `StageStyle.TRANSPARENT` with rounded corners (matching the original Groovy script aesthetic). Added a right-click context menu (background opacity slider, lock-font-size toggle, reset opacity) accessible from the window body and the toolbar button. Background opacity persists across sessions.
+
+**v1.0.2** — Smart default geometry on open: window auto-sizes to the longest current channel name at QuPath's *Location text font size* preference. Saved geometry is restored only when *Lock font size* is checked.
+
+**v1.0.1** — Toolbar button injection lookup uses the `ActionTools` action property (was looking up the wrong key). Keyboard accelerator routes through `QuPathGUI.setAccelerator` so it fires globally. Font size is now driven by window height (not width); added the *Lock font size* toggle.
+
+**v1.0.0** — First release: toolbar button, menu item, accelerator, channel-color rendering with WCAG fallback, image-switch rebinding, RGB empty state, persisted position/size.
+
+Toolbar button placement remains best-effort; if QuPath reorganizes its toolbar in a future release the menu item and keyboard shortcut continue to work.
 
 ---
 
@@ -74,4 +81,4 @@ First release. Notable choices for v1.0:
 Apache License 2.0. Copyright 2026 Regents of the University of Wisconsin-Madison. See [LICENSE](LICENSE).
 
 **Author:** Mike Nelson — University of Wisconsin-Madison
-**Version:** 1.0.0
+**Version:** 1.0.5

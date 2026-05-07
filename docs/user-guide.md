@@ -12,13 +12,13 @@ This guide walks through the legend window one task at a time. Sections are coll
 
 ### First-run mental model
 
-The window shows what QuPath's brightness/contrast dialog calls the *selected* channels — the ones currently contributing to the viewer. Toggle a channel in brightness/contrast and the legend updates immediately. You do not interact with the legend itself except to move, resize, or close it; there is no menu, no settings cog, no in-window control.
+The window shows what QuPath's brightness/contrast dialog calls the *selected* channels — the ones currently contributing to the viewer. Toggle a channel in brightness/contrast and the legend updates immediately. The window itself is a chromeless rounded translucent panel; everything tunable (background opacity, font lock) lives in a right-click menu rather than a visible controls bar.
 
 ### Three ways to open the window
 
 The launch surfaces, with their tooltip text:
 
-- **Toolbar button** (next to brightness/contrast): *Toggle the Channel Names viewer (Ctrl+Shift+C).*
+- **Toolbar button** (labeled `Ch`, with a small triangle in the bottom-right corner indicating that right-click reveals more): *Toggle the Channel Names viewer (Ctrl+Shift+C).* The button sits immediately to the right of QuPath's brightness/contrast button.
 - **Menu item** (`Extensions > Channel Names Viewer...`): *Toggle a small always-visible legend showing currently selected fluorescence channels.*
 - **Keyboard shortcut**: `Ctrl+Shift+C` on Linux and Windows, `Cmd+Shift+C` on macOS.
 
@@ -30,7 +30,16 @@ Each row in the window is one currently-selected channel. Channel names are draw
 
 The contrast check uses WCAG relative luminance (the standard accessibility formula), not perceived brightness. As a result, some bright but low-luminance colors fall into the white-fallback bucket — saturated blues are the common case, since blue contributes the least to perceived luminance even at full saturation. If you picked DAPI as pure blue in brightness/contrast, expect the legend to render that name in white rather than blue. This is intentional, not a bug; the alternative is unreadable blue-on-near-black text. Pick a slightly desaturated or lighter blue in brightness/contrast if you want the channel-color fidelity in the legend.
 
-The window auto-sizes on first show to fit the longest channel name comfortably, then remembers its size for the rest of the session and across QuPath restarts.
+### Window controls — at a glance
+
+The window has no title bar, no buttons, no menu visible by default. It is intentionally minimal so it stays out of the way. Everything is gesture-based:
+
+| Action | Gesture |
+|---|---|
+| Move | Click and drag the body |
+| Resize | Click and drag any edge or corner (cursor changes within ~8 px of an edge) |
+| Close | Double-click the body / press Esc / press the shortcut again / click the toolbar button |
+| Open settings | **Right-click** the body — *or* right-click the toolbar button without opening the window |
 
 </details>
 
@@ -41,9 +50,9 @@ The window auto-sizes on first show to fit the longest channel name comfortably,
 
 The toolbar button, menu item, and keyboard shortcut all do the same thing: toggle the legend window — open it if it is closed, close it if it is open. Hovering each surface shows its tooltip:
 
-- Toolbar button tooltip: *Toggle the Channel Names viewer (Ctrl+Shift+C).* The button sits immediately to the right of QuPath's brightness/contrast button.
-- Menu item: **Extensions > Channel Names Viewer...** Tooltip: *Toggle a small always-visible legend showing currently selected fluorescence channels.*
-- Keyboard shortcut: `Ctrl+Shift+C` (`Cmd+Shift+C` on macOS). The shortcut is registered globally inside QuPath; it works whether the legend has focus or not.
+- **Toolbar button.** Labeled `Ch`. The small right-pointing triangle in the bottom-right corner is the same affordance QuPath uses on its line / polyline tool button: it indicates that right-clicking exposes additional options. Tooltip: *Toggle the Channel Names viewer (Ctrl+Shift+C).*
+- **Menu item.** **Extensions > Channel Names Viewer...** Tooltip: *Toggle a small always-visible legend showing currently selected fluorescence channels.*
+- **Keyboard shortcut.** `Ctrl+Shift+C` (`Cmd+Shift+C` on macOS). The shortcut is registered globally inside QuPath; it works whether the legend has focus or not.
 
 ### Closing
 
@@ -51,9 +60,10 @@ The window can be closed in any of these equivalent ways:
 
 - Press the keyboard shortcut again.
 - Click the toolbar button or menu item again (they toggle).
-- Double-click anywhere on the body of the window — the body tooltip is *Drag title bar to move. Double-click to close.*
+- Double-click anywhere on the body.
 - Press **Esc** while the window has focus.
-- Use the native window-close affordance in the title bar.
+
+There is no native close button; the window is undecorated by design. The four equivalent close gestures above cover the same ground.
 
 ### What if I open it twice?
 
@@ -84,26 +94,30 @@ Switching to a fluorescence image, or selecting a channel in brightness/contrast
 
 ### What "rebinding" means under the hood
 
-The window listens to QuPath's notion of "the active image" rather than to a specific image. Whenever the active image changes, the window's connection to channel-display data is rebuilt. This is transparent to you, but it is the reason the legend keeps working across image switches in v1.0; the original Groovy script does not handle this case and breaks when you change images.
+The window listens to QuPath's notion of "the active image" rather than to a specific image. Whenever the active image changes, the window's connection to channel-display data is rebuilt. This is transparent to you, but it is the reason the legend keeps working across image switches in this extension; the original Groovy script does not handle this case and breaks when you change images.
 
 </details>
 
 <details>
-<summary><strong>Move and customize position</strong></summary>
+<summary><strong>Move and resize the window</strong></summary>
 
-### Dragging the window
+### Drag to move
 
-The legend window has a thin native title bar at the top — drag from there to move it. The title bar tooltip on the body reads *Drag title bar to move. Double-click to close.* The window can be moved anywhere on screen, including onto a second monitor.
+Click and drag the body of the window — there is no title bar. The cursor stays as the default arrow when over the body's interior; resize cursors only appear within ~8 px of an edge, so the move-vs-resize distinction is clear.
+
+### Drag the edges to resize
+
+Within ~8 px of any edge or corner the cursor switches to the matching resize cursor (N / S / E / W / NE / NW / SE / SW). Drag to resize from that edge or corner. There is no painted corner grip; the hot zones around the perimeter handle resize discovery.
 
 ### Position and size persistence
 
-Window position **and** size are saved between sessions in v1.0. Move the window where you want it, resize to taste, close it, and the next QuPath start opens it in the same place. There is no separate "save position" command; the values are persisted automatically when the window closes.
+Window x, y, width, and height are saved between sessions. By default — when **Lock font size** is unchecked — the saved size is *not* restored on open; instead, the window auto-fits to the current channel set (longest channel name × number of rows) at the QuPath *Location text font size* preference. Position is restored if it is still on a visible screen. See the **Settings** section for the lock-font-size opt-in.
 
-If you move the window to a monitor that is later disconnected (for example, an external display you only use at the office), the saved position would be off-screen on the next launch. The extension guards against this by clamping any restored position to the bounds of currently-attached screens; if the saved position is unreachable, the window falls back to centered-on-the-QuPath-main-window placement.
+If you move the window to a monitor that is later disconnected (an external display you only use at the office, for example), the saved position would be off-screen on the next launch. The extension guards against this by clamping any restored position to the bounds of currently-attached screens; if the saved position is unreachable, the window falls back to first-show defaults near the QuPath main window.
 
 ### Multi-monitor
 
-Drag-to-second-monitor works as expected. The window honors the OS's native multi-monitor handling, including different DPI scales per display. If the legend ends up at an unexpected size on a different-DPI monitor, resize once and the new size is saved.
+Drag-to-second-monitor works as expected. The window honors the OS's native multi-monitor handling, including different DPI scales per display.
 
 </details>
 
@@ -112,7 +126,7 @@ Drag-to-second-monitor works as expected. The window honors the OS's native mult
 
 ### What happens when you resize
 
-Drag any edge or corner of the window. The legend resizes; both the window dimensions and the channel-name text grow or shrink together. There is no separate font-size control — size is bound to window dimensions.
+Drag any edge or corner. The legend resizes; both the window dimensions and the channel-name text grow or shrink together. There is no separate font-size control by default — size is bound to window height divided by row count. If you want a *fixed* font size, see *Lock font size* in the **Settings** section below.
 
 ### Why this design
 
@@ -122,15 +136,57 @@ The original Groovy script had a fixed font size. Resize-with-text-scaling is th
 
 ### Bounds
 
-Font size is clamped to a comfortable minimum and a sensible maximum. Below the minimum, channel names start to clip and the empty-state subtitle wraps in ways that look broken; above the maximum, even on a 4K display, the channel rows look comically large. In practice you will not hit either bound during normal use; resizing into either limit has the visible effect of the text holding steady while the window keeps changing size.
+Font size is clamped to a comfortable minimum (10 pt) and a sensible maximum (72 pt). Below the minimum, channel names start to clip and the empty-state subtitle wraps in ways that look broken; above the maximum, even on a 4K display, the channel rows look comically large. In practice you will not hit either bound during normal use; resizing into either limit has the visible effect of the text holding steady while the window keeps changing size.
 
 ### Aspect
 
-The font scales with the smaller of the window's width and height. Stretching the window into a long thin rectangle does not blow up the text — it widens the available room for long channel names while keeping them readable. This avoids a common failure mode where the user shrinks one dimension and the text clips vertically.
+The font scales with window *height* divided by row count, not with width. Stretching the window into a long thin rectangle widens the room for long channel names while keeping their height steady; shrinking the height squeezes the rows together. This avoids a common failure mode where the user widens the window to fit a long channel name and the text becomes comically tall.
 
-### Where the resize handle lives
+</details>
 
-There is no painted corner-grabber. The window uses standard native window chrome, so you resize by dragging any edge or any corner exactly as you would resize any other window on your operating system. The cursor changes to the standard resize cursor on hover.
+<details>
+<summary><strong>Settings — the right-click menu</strong></summary>
+
+### Two right-click surfaces
+
+The same three settings (background opacity, lock font size, reset opacity) live behind a context menu accessible in two places:
+
+- **Right-click the legend window body.** The right-click anywhere inside the window opens the menu.
+- **Right-click the toolbar button.** This works *without* opening the window — useful if you want to set background opacity or pre-lock the font size before the window is even visible. The small triangle in the bottom-right corner of the `Ch` button is the visual cue that more is hidden behind right-click.
+
+There is no equivalent on the menu item or the keyboard shortcut — they only toggle the window open/closed.
+
+### Background opacity (slider)
+
+The slider controls the alpha of the window's near-black background, from 0.05 (nearly invisible — desktop / image shows through) to 1.0 (fully opaque). Default 0.75 matches the original Groovy script. The change is live: drag the slider and the background updates in real time. The window stays draggable and resizable at any opacity.
+
+The slider stays open while you drag (it does not hide the menu on click), so you can fine-tune without re-opening the menu repeatedly. Click anywhere outside the menu to dismiss.
+
+### Lock font size (checkbox)
+
+Default: **off**. With lock off, every reopen recomputes the window's default geometry from the current channel set + QuPath's *Location text font size* preference, so a scientist who selects 4 channels then 12 channels gets two appropriately-sized windows.
+
+Turn lock on when you want a fixed font (e.g. for matched screenshots across panels with different channel counts). Turning lock on captures the *current* on-screen font size. From then on, the saved width / height / lock state are restored on every reopen and the resize-with-text behavior is suppressed (the font stays at the locked value while the window resizes around it).
+
+Turning lock off again restores the auto-fit behavior on the next open.
+
+### Reset background opacity
+
+Sets the slider back to the default 0.75. Convenient if you have nudged the slider to one extreme and want to return without scrolling the slider back manually.
+
+### What is persisted
+
+The following are persisted automatically when the window closes:
+
+- Position (x, y) and size (width, height)
+- Lock font size (boolean) and the locked font size value (pt)
+- Background opacity
+
+Persistence happens automatically when the window closes. There is no "save state" command and no "reset to defaults" UI; if you want to reset, clear QuPath's preferences for this extension via the standard QuPath preferences workflow.
+
+### What is *not* persisted
+
+The fact that the window was *open* on shutdown is not persisted. Each QuPath start has the window closed; you reopen it as needed. This avoids the "I closed QuPath, came back the next day, and an unwanted window popped up" surprise.
 
 </details>
 
@@ -144,42 +200,14 @@ There is no painted corner-grabber. The window uses standard native window chrom
 ### What the extension adds over the script
 
 - **Discoverability.** The script must be loaded into QuPath's script editor and run; the extension is a toolbar button, a menu item, and a keyboard shortcut.
-- **Resize-with-text-scaling.** The script's font size is fixed.
+- **Resize-with-text-scaling.** The script's font size is fixed; the extension scales font with window height (and offers a lock toggle for fixed-size matched screenshots).
 - **Robust image-switch handling.** The script's listener binding is broken when you open a new image; the extension rebinds.
 - **Empty-state for RGB images.** The script does not guard against non-fluorescence images and renders an empty pane; the extension renders an explanatory message.
 - **Listener cleanup.** Closing the extension's window removes the channel-display listener; closing the script's window leaks one listener per show.
-- **Position and size persistence.** The script forgets where it was; the extension remembers.
-
-### When to keep using the script
-
-- You have customized the Groovy version and prefer your customization to the extension's behavior.
-- You have it wired into a larger automation that runs the script as part of a workflow.
-- You want a fully-transparent window aesthetic that the extension does not provide (the extension uses a thin native title bar; see *What's new in v1.0* in the README).
+- **Persistence.** Position, size, font lock state, locked font size, and background opacity all persist across QuPath restarts.
+- **Right-click settings.** Background opacity slider, lock font, reset opacity. The script has no in-window controls.
 
 The extension does not steal `Cmd/Ctrl+Shift+C` from the script — the script does not register a global accelerator at all — so the keymap stays clean even if both are installed.
-
-</details>
-
-<details>
-<summary><strong>Settings and preferences</strong></summary>
-
-### v1.0 has no preferences pane
-
-There are no user-tunable settings in v1.0. Defaults are fixed in code:
-
-- **Keyboard shortcut:** `Ctrl+Shift+C` on Linux/Windows, `Cmd+Shift+C` on macOS.
-- **Default position on first launch:** centered on the QuPath main window.
-- **Default size on first launch:** auto-sized to the longest channel name at the default font size.
-- **Minimum window size:** small enough to be unobtrusive, large enough that the empty-state subtitle still renders.
-- **Background color, font family, minimum/maximum font size, font-size divisor:** fixed in code; not user-configurable in v1.0.
-
-### What is persisted
-
-Window x, y, width, and height are persisted across QuPath restarts. Persistence happens automatically when the window closes. There is no "save state" command and no "reset to defaults" UI; if you want to reset, close QuPath and the next launch will restore the previously-saved values. To force a true first-show experience, clear QuPath's preferences for this extension via the standard QuPath preferences workflow.
-
-### What is not persisted
-
-The fact that the window was *open* on shutdown is not persisted. Each QuPath start has the window closed; you reopen it as needed. This avoids the "I closed QuPath, came back the next day, and an unwanted window popped up" surprise.
 
 </details>
 
@@ -194,6 +222,14 @@ The fact that the window was *open* on shutdown is not persisted. Each QuPath st
 
 **Fix.** Use the menu item (**Extensions > Channel Names Viewer...**) or the keyboard shortcut (`Ctrl+Shift+C`). File an issue with the QuPath version and a copy of the log excerpt; the toolbar lookup heuristic can be updated for the new layout.
 
+### "Background is solid, slider does nothing"
+
+**What you see.** The opacity slider in the right-click menu changes the background brightness but never makes it actually transparent.
+
+**Cause.** This was a bug in v1.0.3 — the rgba background was painted on the inner content pane while the window's outer surface was opaque, so the slider only darkened that opaque layer.
+
+**Fix.** Update to v1.0.4 or later. The rounded translucent fill is now painted on the root surface, so the slider produces real transparency.
+
 ### "Window does not update when I toggle channels"
 
 **What you see.** Toggling a channel in brightness/contrast does not change the legend.
@@ -206,9 +242,13 @@ The fact that the window was *open* on shutdown is not persisted. Each QuPath st
 
 **What you see.** Resizing the window does not scale the text past a certain point.
 
-**Cause.** Font size is clamped to documented minimum and maximum bounds. The clamp prevents unreadable text at very small sizes and runaway scaling at very large sizes. This is intentional, not a bug.
+**Cause.** Font size is clamped to a 10–72 pt range. The clamp prevents unreadable text at very small sizes and runaway scaling at very large sizes. This is intentional, not a bug.
 
-**Fix.** Resize the window within the working range. If the maximum is too small for your specific use case (for example, presenting on a 4K display from across a conference room), file an issue with your screen size and DPI; the bounds can be revisited.
+**Fix.** Resize the window within the working range. If the maximum is too small for your specific use case (presenting on a 4K display from across a conference room, for example), file an issue with your screen size and DPI; the bounds can be revisited.
+
+### "I want a fixed font for matched screenshots"
+
+Turn on **Lock font size** in the right-click menu. The current font becomes the locked size and is restored on every reopen until you uncheck the option. Geometry is also restored when locked, so the window itself stays the same size between runs.
 
 ### "Window is off-screen on startup"
 
@@ -216,13 +256,13 @@ The fact that the window was *open* on shutdown is not persisted. Each QuPath st
 
 **Cause.** The saved position references a screen the OS no longer reports as attached.
 
-**Fix.** This should auto-correct: the extension clamps restored positions to the bounds of currently-attached screens at startup, so the next launch will recenter the window. If for some reason the auto-correct does not work, close and reopen the window with the keyboard shortcut — opening always brings the window to a visible location.
+**Fix.** This should auto-correct: the extension clamps restored positions to the bounds of currently-attached screens at startup, so the next launch will reposition the window. If for some reason the auto-correct does not work, close and reopen the window with the keyboard shortcut.
 
 ### "Why is my channel showing as white?"
 
 **What you see.** The legend draws a channel name in white even though you picked a non-white display color (a saturated blue or a dark red, for example) in brightness/contrast.
 
-**Cause.** The legend background is near-black (`rgb(13, 13, 13)`), and channel-color text is only drawn in the channel's actual color when that color clears the WCAG AA contrast ratio (4.5:1) against the background. Pure-blue channels in particular have very low WCAG luminance (blue's coefficient is `0.0722`, far smaller than green's `0.7152`), so even fully-saturated `rgb(0, 0, 255)` reads as `2.26:1` contrast — well below 4.5:1 — and the legend falls back to white text. Dark reds, dark purples, and other low-luminance hues fall into the same bucket.
+**Cause.** The legend background is near-black, and channel-color text is only drawn in the channel's actual color when that color clears the WCAG AA contrast ratio (4.5:1) against the background. Pure-blue channels in particular have very low WCAG luminance (blue's coefficient is `0.0722`, far smaller than green's `0.7152`), so even fully-saturated `rgb(0, 0, 255)` reads as `2.26:1` contrast — well below 4.5:1 — and the legend falls back to white text. Dark reds, dark purples, and other low-luminance hues fall into the same bucket.
 
 **Fix.** This is intentional. White text is more readable on the dark background than a low-luminance hue. If you want the legend to keep the channel-color fidelity, pick a slightly desaturated or lighter color for that channel in **Image > Brightness/Contrast** — for example a sky-blue rather than a pure blue. The legend will pick up the change immediately. See **Reading the legend** in the *Getting started* section for the full explanation.
 
@@ -233,6 +273,14 @@ The fact that the window was *open* on shutdown is not persisted. Each QuPath st
 **Cause.** The active image is RGB or brightfield, no image is open, or the image is fluorescence but no channels are currently selected. This is intentional behavior.
 
 **Fix.** Open a fluorescence / multiplex image, or select channels in **Brightness/Contrast**. The window updates automatically. The exact subtitle tells you which of the three causes is in play.
+
+### "Right-click does nothing on Linux"
+
+**What you see.** Right-clicking the body or the toolbar button does not open the settings menu.
+
+**Cause.** Some Linux setups intercept right-click for compositor or window-manager actions before the application sees the event.
+
+**Fix.** Try Shift+F10 with the window focused (the JavaFX context-menu shortcut on most platforms), or two-finger tap on a trackpad. If neither works, file an issue with your distribution, desktop environment, and Wayland-vs-X11 status.
 
 ### Anything else
 

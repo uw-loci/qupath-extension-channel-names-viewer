@@ -24,10 +24,10 @@ Run unit tests with `./gradlew test`. Tests run on JavaFX; CI / headless invocat
 
 Three top-level classes plus one preferences class, all under `qupath.ext.channelnamesviewer`:
 
-- **`ChannelNamesViewerExtension`** — `QuPathExtension` entry point. Registers the menu item under `Extensions`, binds the keyboard accelerator (`shortcut+shift+c`), and inserts the toolbar button next to brightness/contrast. Owns the singleton `ChannelLegendStage` instance and toggles its visibility on each launch-surface activation.
+- **`ChannelNamesViewerExtension`** — `QuPathExtension` entry point. Registers the menu item under `Extensions`, binds the keyboard accelerator (`shortcut+shift+c`), and inserts the toolbar button next to brightness/contrast. The toolbar button uses a `StackPane` graphic (`"Ch"` label + a small right-pointing `Path` triangle in the bottom-right corner) to signal that right-click reveals the settings menu, mirroring QuPath's tool-button convention. Owns the singleton `ChannelLegendStage` instance and toggles its visibility on each launch-surface activation; the right-click handler on the toolbar button lazily constructs the stage so the menu can be opened without showing the window.
 - **`core.ChannelLegendController`** — listener lifecycle. Binds to `imageDataProperty`, `viewerProperty`, and `imageDisplay.selectedChannels()`. Rebinds on image switch and viewer switch. Owns the empty-state branching (no image / RGB image / no selected channels). Renders the channel rows into the stage's content `VBox`.
-- **`ui.ChannelLegendStage`** — the JavaFX `Stage` (`StageStyle.UTILITY`). Owns the resize-binding (font size = `clamp(min(width, height) / 8, 10pt, 72pt)`) and the position/size persistence wiring.
-- **`preferences.ChannelNamesViewerPreferences`** — four `DoubleProperty` keys (windowX, windowY, windowWidth, windowHeight) using sentinel `-1` for "no saved value." Pattern source: `qupath-extension-confusion-matrix/preferences/CMPreferences.java`.
+- **`ui.ChannelLegendStage`** — the JavaFX `Stage` (`StageStyle.TRANSPARENT`, scene fill `Color.TRANSPARENT`). The root `StackPane` paints the rounded translucent fill (`rgba(0, 0, 0, opacity)` + `-fx-background-radius: 10`); the inner `content` `VBox` is explicitly transparent so it does not fight the root background. Owns the height-driven font binding (`clamp((height - 30) / rowCount * 0.7, 10pt, 72pt)`), edge/corner resize on all 8 sides via scene-level mouse handlers (8 px hot zone), drag-to-move on the body, the right-click context menu, and persistence of geometry / lock state / locked font pt / opacity.
+- **`preferences.ChannelNamesViewerPreferences`** — `DoubleProperty` / `BooleanProperty` keys for `windowX`, `windowY`, `windowWidth`, `windowHeight` (sentinel `-1.0` meaning "no saved value"), `fontLocked` (boolean), `lockedFontPt` (double, default 20.0), and `backgroundOpacity` (double, default 0.75). Pattern source: `qupath-extension-confusion-matrix/preferences/CMPreferences.java`.
 
 A machine-readable `codemap/codemap.json` is generated for v1.0 and committed to the repo. Use it to navigate dependencies between subpackages.
 
@@ -51,31 +51,46 @@ The listener instance is stored in a field, not constructed inline at registrati
 <details>
 <summary><strong>Font-binding pattern</strong></summary>
 
-JavaFX `Font` is not directly bindable to a `DoubleProperty`, so we go through one indirection:
+JavaFX `Font` is not directly bindable to a `DoubleProperty`, so we go through one indirection. Two stacked bindings drive font size: a `dynamicSize` derived from window height + row count, and a `clampedSize` that returns the locked value or the dynamic value depending on the lock toggle.
 
 ```java
-DoubleBinding rawSize = Bindings.min(stage.widthProperty(), stage.heightProperty()).divide(8.0);
-DoubleBinding fontSize = Bindings.createDoubleBinding(
-    () -> Math.max(MIN_FONT_PT, Math.min(MAX_FONT_PT, rawSize.get())),
-    rawSize);
+DoubleBinding dynamicSize = Bindings.createDoubleBinding(
+    () -> {
+        double avail = stage.getHeight() - VERTICAL_OVERHEAD_PX; // 30 px
+        if (avail <= 0) return MIN_FONT_PT;
+        int rows = Math.max(rowCount.get(), 1);
+        double raw = (avail / rows) * ROW_HEIGHT_FACTOR; // 0.7
+        return Math.max(MIN_FONT_PT, Math.min(MAX_FONT_PT, raw));
+    },
+    stage.heightProperty(), rowCount);
+
+DoubleBinding clampedSize = Bindings.createDoubleBinding(
+    () -> fontLocked.get() ? lockedFontPt.get() : dynamicSize.get(),
+    fontLocked, lockedFontPt, dynamicSize);
 
 label.fontProperty().bind(Bindings.createObjectBinding(
-    () -> Font.font(fontSize.get()),
-    fontSize));
+    () -> Font.font(clampedSize.get()),
+    clampedSize));
 ```
 
-`MIN_FONT_PT = 10.0` and `MAX_FONT_PT = 72.0`. Divisor `8.0` produces ~18pt at the auto-sized first-show window and scales naturally from there. JavaFX coalesces width/height pulse updates so a fast drag produces at most one font rebuild per layout pulse — no performance concern.
+`MIN_FONT_PT = 10.0`, `MAX_FONT_PT = 72.0`, `VERTICAL_OVERHEAD_PX = 30.0`, `ROW_HEIGHT_FACTOR = 0.7`. The height-driven formula was chosen over `min(width, height) / 8` because horizontal width tracks longest channel name, not number of rows — scaling font with width meant a long channel name forced a comically tall window. JavaFX coalesces height pulse updates so a fast drag produces at most one font rebuild per layout pulse.
 
-`stage.setMinWidth(120)` and `stage.setMinHeight(60)` enforce the floor; without them the native UTILITY chrome can be dragged below the size at which the font clamp can produce a legible result.
+`stage.setMinWidth(120)` and `stage.setMinHeight(60)` enforce the floor; the resize handler in `applyResize` clamps to those values and pins stage origin when shrinking from the W/N/NW/SW/NE edges so the window edge under the cursor stays put.
+
+When the user opens the window with **Lock font size** off, `applyDefaultGeometryIfUnlocked()` sizes the stage to fit the longest channel name × current row count at QuPath's `PathPrefs.locationFontSizeProperty()` value, mapped to pt via a switch (TINY=10, SMALL=12, MEDIUM=14, LARGE=18, HUGE=24). Reading the live preference rather than copying its CSS value keeps the legend in sync with user preferences.
 
 </details>
 
 <details>
 <summary><strong>Toolbar button injection</strong></summary>
 
-The button is inserted by walking `qupath.getToolBar().getItems()`, finding the `ButtonBase` whose `getProperties().get("controlsfx.actions.action")` reference-equals the brightness/contrast `Action` instance, and inserting a fresh `Button` at `index + 1`. The lookup is wrapped in `Platform.runLater` twice to defer until after QuPath finishes its toolbar build at startup.
+The button is inserted by walking `qupath.getToolBar().getItems()`, finding the `ButtonBase` whose `ActionTools.getActionProperty(node)` reference-equals `CommonActions.BRIGHTNESS_CONTRAST`, and inserting a fresh `Button` at `index + 1`. The lookup is wrapped in `Platform.runLater` twice to defer until after QuPath finishes its toolbar build at startup. (v1.0.0 mistakenly read the raw `"controlsfx.actions.action"` properties key, which is *not* what `ActionTools` writes; the lookup found nothing and the button never appeared. v1.0.1 switched to `ActionTools.getActionProperty`.)
 
 The `Action`-reference identity check is locale-stable; tooltip-text matching is fragile because the brightness/contrast button's tooltip is resource-bundle-driven and varies by locale. Reference precedents for the toolbar-mutation pattern: `qupath-extension-wizard-wand/WizardWandExtension.java` and `qupath-extension-polyline-wand/PolylineWandExtension.java`.
+
+The button's graphic is a `StackPane` containing a `Label("Ch")` centered and a small right-pointing `Path` triangle (5 px, 0.55 opacity, fill bound to `button.textFillProperty()` so it tracks light / dark themes) anchored bottom-right. This mirrors the affordance QuPath itself uses on its line / polyline tool button (see `ToolBarComponent#addContextMenuDecoration`); we picked an inline `StackPane` graphic over the ControlsFX `Decorator` API used there because the `Decorator` path requires juggling scene-listener and graphic-property listeners to keep the decoration stable across `setGraphic` calls. With everything baked into the graphic itself the decoration cannot drift.
+
+The right-click handler on the button calls `legendStage.buildSettingsMenu()` and shows it anchored to the button — without showing the legend window itself. The legend stage is constructed lazily on first right-click if the user has not yet opened the legend.
 
 If the lookup fails (a future QuPath release may reorganize the toolbar build sequence) the failure path is silent: the extension logs a WARN naming the heuristic and skips the button injection. The menu item and keyboard shortcut are unaffected.
 
@@ -84,9 +99,13 @@ If the lookup fails (a future QuPath release may reorganize the toolbar build se
 <details>
 <summary><strong>Stage style</strong></summary>
 
-The window uses `StageStyle.UTILITY` on every platform. This gives a thin native title bar — used for drag-to-move — and native edge/corner resize chrome. The original Groovy script used `StageStyle.TRANSPARENT` plus a custom `MoveablePaneHandler`; we evaluated that path and concluded the operational cost (custom corner-grabber, Wayland transparent-stage rendering edge cases, HiDPI grabber sizing) outweighs the aesthetic gain. The trade-off is documented in `02_design.md` section 4 of this feature's design folder.
+The window uses `StageStyle.TRANSPARENT` (v1.0.3+). v1.0.0–1.0.2 shipped `StageStyle.UTILITY` for free native title bar / resize chrome; user feedback that the chrome diverged too far from the original Groovy aesthetic prompted the switch. The TRANSPARENT path requires us to own three things the OS would otherwise provide:
 
-If a future v1.x reverts to `TRANSPARENT`, plan to add: a custom corner-grabber node (16x16 px in the bottom-right, `Cursor.SE_RESIZE` on hover, `setOnMousePressed` / `setOnMouseDragged` adjusting `stage.setWidth` / `setHeight`); a `MoveablePaneHandler`-style drag-anywhere handler on the root pane; and a Wayland-fallback hidden preference.
+1. **Background paint.** `Scene.setFill(Color.TRANSPARENT)` makes the scene transparent, but JavaFX's modena.css applies an opaque `.root` background-color that defeats it. The fix is an inline `setStyle("-fx-background-color: rgba(0, 0, 0, %.3f); -fx-background-radius: 10; -fx-background-insets: 0;")` on the root `StackPane`. v1.0.3 painted the rgba background on the inner content `VBox` instead; the StackPane's modena gray remained behind it, so the opacity slider only changed the apparent brightness of that gray. v1.0.4 moved the paint to the root, giving real transparency.
+2. **Drag-to-move.** Scene-level `setOnMousePressed` / `setOnMouseDragged`. The press handler captures `stage.getX/Y - event.getScreenX/Y` (modeled on the original Groovy `MoveablePaneHandler`); the drag handler updates `stage.setX/Y`. Children inside `content` (Labels, etc.) are explicitly `setMouseTransparent(true)` so events always reach the scene-level handler.
+3. **Edge/corner resize.** Scene-level `setOnMouseMoved` detects whether the cursor is within `EDGE_RESIZE_HOTSPOT_PX` (8 px) of any edge or corner and updates `scene.setCursor(...)` to the corresponding `Cursor.X_RESIZE`. Press initiates a resize with `resizingFrom = ResizeEdge.{N,S,E,W,NE,NW,SE,SW}`; `applyResize` computes new width / height / origin (origin shifts for W / N / NW / SW / NE edges where shrinking the stage means moving its top-left corner). Min-width / min-height clamps pin the origin so the cursor-side edge stays under the mouse.
+
+Linux compositors that lack a compositor-side alpha channel (some pure-X11 setups) may render TRANSPARENT stages as solid black. There is no programmatic detection; if a user reports this we add a hidden preference fallback to `StageStyle.UTILITY`. As of v1.0.4 no such reports have surfaced.
 
 </details>
 
