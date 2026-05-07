@@ -24,8 +24,6 @@ For v1.0 the extension is distributed as a single jar:
 
 After restart you will see the new toolbar button next to QuPath's brightness/contrast button, a new menu entry under **Extensions > Channel Names Viewer...**, and the keyboard shortcut `Ctrl+Shift+C` (`Cmd+Shift+C` on macOS) ready to open the legend.
 
-Catalog-based distribution via `qupath-catalog-mikenelson` is planned for a later release.
-
 ---
 
 ## Quick start

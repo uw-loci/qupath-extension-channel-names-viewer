@@ -157,8 +157,6 @@ Tag conventions: `v{major}.{minor}.{patch}` (for example, `v1.0.0`). The maintai
 
 Release artifact: `build/libs/qupath-extension-channel-names-viewer-{version}-all.jar` from `./gradlew shadowJar`. Attach to the GitHub Release.
 
-Catalog wiring uses `.github/workflows/notify-catalog.yml` to dispatch `repository_dispatch: extension-release` to `qupath-catalog-mikenelson`. The workflow needs the org-level `CATALOG_DISPATCH_TOKEN` secret. After the first release on this repo, verify (1) the workflow ran, (2) the catalog received an `Auto-bump qupath-extension-channel-names-viewer -> {tag}` commit within ~1 minute, and (3) the new entry in the catalog's `catalog.json` matches the published asset. The catalog workflow also exposes `workflow_dispatch` for manual recovery.
-
-Per the root `CLAUDE.md` policy, every release verification should also confirm a fresh catalog install pulls the new jar — older catalog setups have served stale jars when the dispatch hook was missing.
+This extension is distributed as a manual jar drop via GitHub Releases, not through a QuPath extension catalog.
 
 </details>
