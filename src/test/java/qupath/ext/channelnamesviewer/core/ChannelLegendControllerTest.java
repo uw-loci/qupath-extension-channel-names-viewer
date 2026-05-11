@@ -74,6 +74,100 @@ class ChannelLegendControllerTest {
                 .isEqualTo(red);
     }
 
+    // ------------------------------------------------------------------
+    // Order-preservation helper (v1.0.6) -- tests for orderChannels(...)
+    // ------------------------------------------------------------------
+
+    /**
+     * The core invariant of the "Preserve channel order" feature: a channel
+     * that is deselected and re-selected returns to its canonical row, not
+     * to the bottom of the legend. The helper takes the canonical available
+     * list and the user's current (possibly out-of-order) selection and
+     * returns rows in canonical order, filtered to selected channels only.
+     */
+    @Test
+    void orderChannelsPreservesCanonicalOrderWhenEnabled() {
+        var dapi = new StubChannelDisplayInfo("DAPI");
+        var fitc = new StubChannelDisplayInfo("FITC");
+        var cy3 = new StubChannelDisplayInfo("Cy3");
+        var cy5 = new StubChannelDisplayInfo("Cy5");
+        List<ChannelDisplayInfo> available = List.of(dapi, fitc, cy3, cy5);
+
+        // User deselected FITC then reselected -- QuPath puts FITC at the end.
+        List<ChannelDisplayInfo> selected = List.of(dapi, cy3, cy5, fitc);
+
+        List<ChannelDisplayInfo> ordered =
+                ChannelLegendController.orderChannels(available, selected, true);
+
+        // Canonical order: DAPI, FITC, Cy3, Cy5 (filtered to those selected = all four).
+        assertThat(ordered).containsExactly(dapi, fitc, cy3, cy5);
+    }
+
+    @Test
+    void orderChannelsReturnsSelectionVerbatimWhenDisabled() {
+        var dapi = new StubChannelDisplayInfo("DAPI");
+        var fitc = new StubChannelDisplayInfo("FITC");
+        var cy3 = new StubChannelDisplayInfo("Cy3");
+        List<ChannelDisplayInfo> available = List.of(dapi, fitc, cy3);
+        // Click order: FITC, DAPI (Cy3 not selected).
+        List<ChannelDisplayInfo> selected = List.of(fitc, dapi);
+
+        List<ChannelDisplayInfo> ordered =
+                ChannelLegendController.orderChannels(available, selected, false);
+
+        // Legacy behavior preserved: returns the selection list unchanged.
+        assertThat(ordered).containsExactly(fitc, dapi);
+    }
+
+    @Test
+    void orderChannelsFiltersToSelectionWhenPreservingOrder() {
+        var dapi = new StubChannelDisplayInfo("DAPI");
+        var fitc = new StubChannelDisplayInfo("FITC");
+        var cy3 = new StubChannelDisplayInfo("Cy3");
+        var cy5 = new StubChannelDisplayInfo("Cy5");
+        List<ChannelDisplayInfo> available = List.of(dapi, fitc, cy3, cy5);
+        // Only Cy3 and DAPI selected, click order Cy3->DAPI.
+        List<ChannelDisplayInfo> selected = List.of(cy3, dapi);
+
+        List<ChannelDisplayInfo> ordered =
+                ChannelLegendController.orderChannels(available, selected, true);
+
+        // Canonical order DAPI, Cy3 (skipping FITC and Cy5 since they're not selected).
+        assertThat(ordered).containsExactly(dapi, cy3);
+    }
+
+    @Test
+    void orderChannelsAppendsSelectedNotInAvailableAsFallback() {
+        var dapi = new StubChannelDisplayInfo("DAPI");
+        var fitc = new StubChannelDisplayInfo("FITC");
+        // Imagine an exotic transform: it appears in selected but not in available.
+        var phantom = new StubChannelDisplayInfo("phantom");
+        List<ChannelDisplayInfo> available = List.of(dapi, fitc);
+        List<ChannelDisplayInfo> selected = List.of(fitc, phantom, dapi);
+
+        List<ChannelDisplayInfo> ordered =
+                ChannelLegendController.orderChannels(available, selected, true);
+
+        // Canonical channels first in canonical order, exotic ones appended (never dropped).
+        assertThat(ordered).containsExactly(dapi, fitc, phantom);
+    }
+
+    @Test
+    void orderChannelsFallsBackToSelectionWhenAvailableEmpty() {
+        var dapi = new StubChannelDisplayInfo("DAPI");
+        var fitc = new StubChannelDisplayInfo("FITC");
+        List<ChannelDisplayInfo> selected = List.of(fitc, dapi);
+
+        // Empty available list: we'd rather show channels in click order than nothing.
+        List<ChannelDisplayInfo> ordered =
+                ChannelLegendController.orderChannels(List.of(), selected, true);
+        assertThat(ordered).containsExactly(fitc, dapi);
+
+        // null is treated the same as empty.
+        ordered = ChannelLegendController.orderChannels(null, selected, true);
+        assertThat(ordered).containsExactly(fitc, dapi);
+    }
+
     @Test
     void textColorForBrightWhiteIsUnchanged() {
         var bright = javafx.scene.paint.Color.rgb(255, 255, 255);

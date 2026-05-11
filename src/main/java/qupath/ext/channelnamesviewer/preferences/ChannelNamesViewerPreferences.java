@@ -40,6 +40,15 @@ public final class ChannelNamesViewerPreferences {
     private static DoubleProperty lockedFontPtProperty;
     /** Background opacity (0.05-1.0); 0.75 default matches the original Groovy script. (v1.0.3+) */
     private static DoubleProperty backgroundOpacityProperty;
+    /**
+     * Whether the legend renders channels in the image's canonical channel order
+     * (v1.0.6+). When true (default), the legend iterates the image's
+     * {@code availableChannels()} and filters to those in the current selection,
+     * so a channel that is deselected and reselected returns to its original
+     * row -- not to the bottom. When false, the legend uses
+     * {@code selectedChannels()} order verbatim (legacy behavior).
+     */
+    private static BooleanProperty preserveChannelOrderProperty;
 
     private static volatile boolean installed = false;
 
@@ -71,6 +80,8 @@ public final class ChannelNamesViewerPreferences {
                 PREFIX + "lockedFontPt", 20.0);
         backgroundOpacityProperty = PathPrefs.createPersistentPreference(
                 PREFIX + "backgroundOpacity", 0.75);
+        preserveChannelOrderProperty = PathPrefs.createPersistentPreference(
+                PREFIX + "preserveChannelOrder", true);
 
         installed = true;
         logger.info("Channel Names Viewer preferences installed");
@@ -205,6 +216,20 @@ public final class ChannelNamesViewerPreferences {
     public static DoubleProperty backgroundOpacityProperty() {
         ensureInstalled();
         return backgroundOpacityProperty;
+    }
+
+    public static boolean getPreserveChannelOrder() {
+        return preserveChannelOrderProperty == null || preserveChannelOrderProperty.get();
+    }
+
+    public static void setPreserveChannelOrder(boolean v) {
+        ensureInstalled();
+        preserveChannelOrderProperty.set(v);
+    }
+
+    public static BooleanProperty preserveChannelOrderProperty() {
+        ensureInstalled();
+        return preserveChannelOrderProperty;
     }
 
     private static void ensureInstalled() {

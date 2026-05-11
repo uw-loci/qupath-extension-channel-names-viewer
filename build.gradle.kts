@@ -9,7 +9,7 @@ plugins {
 qupathExtension {
     name = "qupath-extension-channel-names-viewer"
     group = "io.github.michaelsnelson"
-    version = "1.0.5"
+    version = "1.0.6"
     description = "A small always-visible legend window listing the currently selected fluorescence channels in QuPath."
     automaticModule = "io.github.michaelsnelson.extension.channelnamesviewer"
 }

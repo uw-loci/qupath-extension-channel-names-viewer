@@ -712,6 +712,21 @@ public class ChannelLegendStage {
 
         menu.getItems().add(new SeparatorMenuItem());
 
+        // --- Preserve channel order (v1.0.6+) ---
+        // Default true: re-selecting a channel returns it to its original row
+        // rather than appending to the bottom. Unchecking restores the legacy
+        // selection-order behavior.
+        CheckMenuItem preserveOrderItem = new CheckMenuItem("Preserve channel order");
+        preserveOrderItem.setSelected(ChannelNamesViewerPreferences.getPreserveChannelOrder());
+        preserveOrderItem.selectedProperty().addListener((obs, oldVal, newVal) ->
+                ChannelNamesViewerPreferences.setPreserveChannelOrder(newVal));
+        // Keep menu state in sync if the pref changes elsewhere (e.g. another menu instance).
+        ChannelNamesViewerPreferences.preserveChannelOrderProperty()
+                .addListener((obs, oldVal, newVal) -> preserveOrderItem.setSelected(newVal));
+        menu.getItems().add(preserveOrderItem);
+
+        menu.getItems().add(new SeparatorMenuItem());
+
         // --- Lock font size ---
         CheckMenuItem lockItem = new CheckMenuItem("Lock font size");
         lockItem.setSelected(fontLocked.get());
