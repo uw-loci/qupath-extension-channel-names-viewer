@@ -35,43 +35,30 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ChannelLegendControllerTest {
 
     /**
-     * Direct test of the WCAG-AA white-fallback rule (Phase 3 self-refinement).
-     * <p>The rule: if the channel color has WCAG contrast ratio &lt; 4.5:1 against
-     * the rgb(13,13,13) background, fall back to white. Pure blue rgb(0,0,255)
-     * has HSB-brightness 1.0 but luminance only 0.0722 -- ratio 2.26:1, fails AA,
-     * so the rule returns white. (The earlier brightness-only rule from Phase 1
-     * section 7 was found to fail for 180/715 HSB-sweep combinations and was
-     * replaced with this luminance-based check.)
+     * v1.0.7: {@code textColorFor} is now an identity function. The pre-v1.0.7
+     * WCAG-AA flip-to-white was opaque to users -- selecting a dark-blue
+     * channel produced a white legend row. Readability for dark channels is
+     * now an opt-in white-outline effect applied by the stage (preference
+     * {@code channelnamesviewer.whiteTextOutline}); the channel hue itself
+     * is never replaced.
      */
     @Test
-    void textColorForFallsBackToWhiteForLowContrastChannelColor() {
-        // Pure blue: rgb(0,0,255). Contrast against rgb(13,13,13) is ~2.26:1, below AA.
+    void textColorForReturnsLiteralChannelColor() {
+        // Pure blue used to flip to white pre-v1.0.7; now passes through unchanged.
         var pureBlue = javafx.scene.paint.Color.rgb(0, 0, 255);
-        assertThat(ChannelLegendStage.textColorFor(pureBlue))
-                .isEqualTo(javafx.scene.paint.Color.WHITE);
+        assertThat(ChannelLegendStage.textColorFor(pureBlue)).isEqualTo(pureBlue);
 
-        // Dark navy: rgb(0,0,99). Contrast ~1.09:1, well below AA.
+        // Dark navy: similarly low-contrast vs the dark background, still rendered as-is.
         var darkNavy = javafx.scene.paint.Color.rgb(0, 0, 99);
-        assertThat(ChannelLegendStage.textColorFor(darkNavy))
-                .isEqualTo(javafx.scene.paint.Color.WHITE);
-    }
+        assertThat(ChannelLegendStage.textColorFor(darkNavy)).isEqualTo(darkNavy);
 
-    @Test
-    void textColorForReturnsChannelColorWhenItPassesAA() {
-        // Yellow rgb(255,255,0): contrast ~18.1:1, well above AA.
+        // Yellow: high-contrast, returned as-is (parity with pre-v1.0.7).
         var yellow = javafx.scene.paint.Color.rgb(255, 255, 0);
-        assertThat(ChannelLegendStage.textColorFor(yellow))
-                .isEqualTo(yellow);
+        assertThat(ChannelLegendStage.textColorFor(yellow)).isEqualTo(yellow);
 
-        // Pure green rgb(0,255,0): contrast ~14.2:1, well above AA.
-        var green = javafx.scene.paint.Color.rgb(0, 255, 0);
-        assertThat(ChannelLegendStage.textColorFor(green))
-                .isEqualTo(green);
-
-        // Red rgb(255,0,0): contrast ~4.86:1, just above AA (4.5).
+        // Red was borderline AA pre-v1.0.7; still passes through.
         var red = javafx.scene.paint.Color.rgb(255, 0, 0);
-        assertThat(ChannelLegendStage.textColorFor(red))
-                .isEqualTo(red);
+        assertThat(ChannelLegendStage.textColorFor(red)).isEqualTo(red);
     }
 
     // ------------------------------------------------------------------
@@ -173,6 +160,14 @@ class ChannelLegendControllerTest {
         var bright = javafx.scene.paint.Color.rgb(255, 255, 255);
         assertThat(ChannelLegendStage.textColorFor(bright))
                 .isEqualTo(bright);
+    }
+
+    @Test
+    void textColorForBlackChannelIsReturnedAsIs() {
+        // Even a fully-black channel passes through (a paranoid user could
+        // pick #000000 to mean "this channel is off"; we don't second-guess).
+        var black = javafx.scene.paint.Color.BLACK;
+        assertThat(ChannelLegendStage.textColorFor(black)).isEqualTo(black);
     }
 
     /**

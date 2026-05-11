@@ -21,6 +21,7 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Slider;
 import javafx.scene.control.Tooltip;
+import javafx.scene.effect.DropShadow;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
@@ -93,11 +94,11 @@ public class ChannelLegendStage {
     public static final double MIN_WIDTH = 120.0;
     public static final double MIN_HEIGHT = 60.0;
 
-    /** WCAG AA contrast ratio for normal text (4.5:1). */
-    private static final double WCAG_AA_NORMAL = 4.5;
-
-    /** Background base color (opacity is mixed in via CSS). */
-    private static final Color BACKGROUND_BASE = Color.BLACK;
+    // ---- White-outline effect tuning (v1.0.7+) ----
+    /** Halo radius around each glyph. 2-3 looks like an outline; larger reads as a glow. */
+    private static final double OUTLINE_HALO_RADIUS = 2.5;
+    /** Halo spread (0-1). Higher = more opaque outline, less feathering. */
+    private static final double OUTLINE_HALO_SPREAD = 0.85;
 
     /** Subtitle is one font-size step smaller than headline. */
     private static final double SUBTITLE_SCALE = 0.65;
@@ -294,9 +295,13 @@ public class ChannelLegendStage {
         rowCount.set(rows.size());
         lastRows = List.copyOf(rows);
         lastWasEmpty = false;
+        boolean outline = ChannelNamesViewerPreferences.getWhiteTextOutline();
         for (ChannelRow row : rows) {
             Label label = new Label(row.name());
-            label.setTextFill(textColorFor(row.color()));
+            label.setTextFill(row.color());
+            if (outline) {
+                label.setEffect(buildWhiteOutlineEffect());
+            }
             label.setMouseTransparent(true); // clicks/drags fall through to scene handlers
             label.fontProperty().bind(Bindings.createObjectBinding(
                     () -> Font.font(clampedSize.get()),
@@ -304,6 +309,21 @@ public class ChannelLegendStage {
             ));
             content.getChildren().add(label);
         }
+    }
+
+    /**
+     * White DropShadow tuned to read as a tight halo around each glyph (v1.0.7+).
+     * A new instance per label so JavaFX can render them independently -- effects
+     * are not safe to share across nodes.
+     */
+    private static DropShadow buildWhiteOutlineEffect() {
+        DropShadow ds = new DropShadow();
+        ds.setColor(Color.WHITE);
+        ds.setRadius(OUTLINE_HALO_RADIUS);
+        ds.setSpread(OUTLINE_HALO_SPREAD);
+        ds.setOffsetX(0);
+        ds.setOffsetY(0);
+        return ds;
     }
 
     public void renderEmptyState(EmptyCause cause) {
@@ -342,32 +362,25 @@ public class ChannelLegendStage {
     }
 
     // ----------------------------------------------------------------------
-    // Color contrast logic
+    // Text fill rule (v1.0.7+)
+    //
+    // Channels are rendered in their literal color. The pre-v1.0.7 WCAG-AA
+    // luminance flip-to-white was surprising for users who wanted to see the
+    // color they picked (e.g. a dark-blue DAPI channel coming out white). The
+    // optional "Outline text in white" preference (right-click menu) adds a
+    // white halo via DropShadow so dark channels stay readable without
+    // changing the channel hue.
     // ----------------------------------------------------------------------
 
+    /**
+     * Returns the channel's color verbatim. Retained as a public helper so
+     * existing callers / scripts that referenced the v1.0.6 contrast rule
+     * keep compiling; the contrast adjustment is now opt-in via the
+     * {@link ChannelNamesViewerPreferences#getWhiteTextOutline() outline}
+     * preference.
+     */
     public static Color textColorFor(Color channelColor) {
-        if (contrastRatio(channelColor, BACKGROUND_BASE) < WCAG_AA_NORMAL) {
-            return Color.WHITE;
-        }
         return channelColor;
-    }
-
-    static double contrastRatio(Color a, Color b) {
-        double la = relativeLuminance(a);
-        double lb = relativeLuminance(b);
-        double lighter = Math.max(la, lb);
-        double darker = Math.min(la, lb);
-        return (lighter + 0.05) / (darker + 0.05);
-    }
-
-    private static double relativeLuminance(Color c) {
-        return 0.2126 * srgbToLinear(c.getRed())
-                + 0.7152 * srgbToLinear(c.getGreen())
-                + 0.0722 * srgbToLinear(c.getBlue());
-    }
-
-    private static double srgbToLinear(double channel) {
-        return channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
     }
 
     // ----------------------------------------------------------------------
@@ -724,6 +737,18 @@ public class ChannelLegendStage {
         ChannelNamesViewerPreferences.preserveChannelOrderProperty()
                 .addListener((obs, oldVal, newVal) -> preserveOrderItem.setSelected(newVal));
         menu.getItems().add(preserveOrderItem);
+
+        // --- Outline text in white (v1.0.7+) ---
+        // Default off: render channel name in the literal channel color. When
+        // on, draw a white halo around each glyph so dark colors stay readable
+        // without changing the channel hue.
+        CheckMenuItem outlineItem = new CheckMenuItem("Outline text in white");
+        outlineItem.setSelected(ChannelNamesViewerPreferences.getWhiteTextOutline());
+        outlineItem.selectedProperty().addListener((obs, oldVal, newVal) ->
+                ChannelNamesViewerPreferences.setWhiteTextOutline(newVal));
+        ChannelNamesViewerPreferences.whiteTextOutlineProperty()
+                .addListener((obs, oldVal, newVal) -> outlineItem.setSelected(newVal));
+        menu.getItems().add(outlineItem);
 
         menu.getItems().add(new SeparatorMenuItem());
 

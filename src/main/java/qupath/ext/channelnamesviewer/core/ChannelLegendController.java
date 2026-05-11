@@ -134,17 +134,22 @@ public class ChannelLegendController {
                 adaptStage(Objects.requireNonNull(legendStage, "legendStage cannot be null")),
                 ChannelNamesViewerPreferences::getPreserveChannelOrder
         );
-        // Re-render whenever the user toggles the preserve-order preference,
-        // so the legend updates immediately rather than waiting for the next
+        // Re-render whenever the user toggles a presentation preference so the
+        // legend updates immediately rather than waiting for the next
         // selection / display event.
         ChannelNamesViewerPreferences.preserveChannelOrderProperty()
-                .addListener((obs, oldVal, newVal) -> {
-                    if (Platform.isFxApplicationThread()) {
-                        renderCurrentChannels();
-                    } else {
-                        Platform.runLater(this::renderCurrentChannels);
-                    }
-                });
+                .addListener((obs, oldVal, newVal) -> requestRender());
+        ChannelNamesViewerPreferences.whiteTextOutlineProperty()
+                .addListener((obs, oldVal, newVal) -> requestRender());
+    }
+
+    /** Re-render on the FX thread, hopping over if necessary. */
+    private void requestRender() {
+        if (Platform.isFxApplicationThread()) {
+            renderCurrentChannels();
+        } else {
+            Platform.runLater(this::renderCurrentChannels);
+        }
     }
 
     /**

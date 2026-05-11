@@ -49,6 +49,15 @@ public final class ChannelNamesViewerPreferences {
      * {@code selectedChannels()} order verbatim (legacy behavior).
      */
     private static BooleanProperty preserveChannelOrderProperty;
+    /**
+     * Whether channel name text is drawn with a white outline (v1.0.7+).
+     * Default false: text is rendered in the literal channel color (which may
+     * have poor contrast against the dark background -- the user's choice).
+     * When true a white drop-shadow halo is painted around each glyph, keeping
+     * the channel hue intact while making dark-colored channels readable.
+     * Replaces the v1.0.3-v1.0.6 WCAG auto-flip-to-white rule.
+     */
+    private static BooleanProperty whiteTextOutlineProperty;
 
     private static volatile boolean installed = false;
 
@@ -82,6 +91,8 @@ public final class ChannelNamesViewerPreferences {
                 PREFIX + "backgroundOpacity", 0.75);
         preserveChannelOrderProperty = PathPrefs.createPersistentPreference(
                 PREFIX + "preserveChannelOrder", true);
+        whiteTextOutlineProperty = PathPrefs.createPersistentPreference(
+                PREFIX + "whiteTextOutline", false);
 
         installed = true;
         logger.info("Channel Names Viewer preferences installed");
@@ -230,6 +241,20 @@ public final class ChannelNamesViewerPreferences {
     public static BooleanProperty preserveChannelOrderProperty() {
         ensureInstalled();
         return preserveChannelOrderProperty;
+    }
+
+    public static boolean getWhiteTextOutline() {
+        return whiteTextOutlineProperty != null && whiteTextOutlineProperty.get();
+    }
+
+    public static void setWhiteTextOutline(boolean v) {
+        ensureInstalled();
+        whiteTextOutlineProperty.set(v);
+    }
+
+    public static BooleanProperty whiteTextOutlineProperty() {
+        ensureInstalled();
+        return whiteTextOutlineProperty;
     }
 
     private static void ensureInstalled() {
