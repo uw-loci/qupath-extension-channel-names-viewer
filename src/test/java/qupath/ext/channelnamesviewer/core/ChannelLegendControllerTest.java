@@ -170,6 +170,50 @@ class ChannelLegendControllerTest {
         assertThat(ChannelLegendStage.textColorFor(black)).isEqualTo(black);
     }
 
+    // ------------------------------------------------------------------
+    // Dark-color gate (v1.0.8) -- contrast assists only apply to dark channels.
+    // ------------------------------------------------------------------
+
+    /**
+     * The outline + panel-backdrop contrast assists added in v1.0.7 / v1.0.8
+     * are gated by {@code isDarkColor}: a BT.601 luminance check against the
+     * 0.5 midpoint. Channels that are already bright enough to read against
+     * the dark legend background render bare. This test pins the boundary so
+     * a future tweak to the luminance formula or threshold can't quietly
+     * change which channels get the assist.
+     */
+    @Test
+    void isDarkColorClassifiesChannelsByBT601Luminance() {
+        // Pure blue: luminance = 0.114 -- well below threshold, dark.
+        assertThat(ChannelLegendStage.isDarkColor(javafx.scene.paint.Color.rgb(0, 0, 255)))
+                .isTrue();
+        // Dark navy: even darker, definitely dark.
+        assertThat(ChannelLegendStage.isDarkColor(javafx.scene.paint.Color.rgb(0, 0, 99)))
+                .isTrue();
+        // Pure black: trivially dark.
+        assertThat(ChannelLegendStage.isDarkColor(javafx.scene.paint.Color.BLACK)).isTrue();
+        // Pure red: luminance = 0.299, dark.
+        assertThat(ChannelLegendStage.isDarkColor(javafx.scene.paint.Color.rgb(255, 0, 0)))
+                .isTrue();
+
+        // Pure green: luminance = 0.587, NOT dark (the green channel is bright).
+        assertThat(ChannelLegendStage.isDarkColor(javafx.scene.paint.Color.rgb(0, 255, 0)))
+                .isFalse();
+        // Yellow: luminance = 0.886, very bright.
+        assertThat(ChannelLegendStage.isDarkColor(javafx.scene.paint.Color.rgb(255, 255, 0)))
+                .isFalse();
+        // Pure white: luminance = 1.0, brightest.
+        assertThat(ChannelLegendStage.isDarkColor(javafx.scene.paint.Color.WHITE)).isFalse();
+        // Mid-gray (128, 128, 128): luminance = 128/255 ~= 0.502, just above
+        // threshold -- pinned here so a refactor that drifts the threshold or
+        // formula fails loudly rather than silently flipping mid-gray's category.
+        assertThat(ChannelLegendStage.isDarkColor(javafx.scene.paint.Color.rgb(128, 128, 128)))
+                .isFalse();
+
+        // null: defensive -- never treated as dark, no NPE.
+        assertThat(ChannelLegendStage.isDarkColor(null)).isFalse();
+    }
+
     /**
      * The controller relies on a single {@link ListChangeListener} field
      * instance so that {@code addListener}/{@code removeListener} pair across

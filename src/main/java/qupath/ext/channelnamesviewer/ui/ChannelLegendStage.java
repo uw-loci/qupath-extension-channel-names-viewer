@@ -66,8 +66,11 @@ import java.util.List;
  *   <li>Font size = either the locked value or
  *       {@code clamp((height - VERTICAL_OVERHEAD) / rowCount * ROW_HEIGHT_FACTOR, 10, 72)} pt.</li>
  *   <li>Min size 120 x 60 px.</li>
- *   <li>White-fallback rule: WCAG AA luminance contrast against the dark fill;
- *       channels that fall below render as white text.</li>
+ *   <li>Contrast assist (v1.0.8): channels are always rendered in their
+ *       literal color. Two opt-in, mutually exclusive presentations help dark
+ *       channels read against the dark background -- a white halo (DropShadow)
+ *       or a translucent off-white backdrop chip. Both gate on BT.601
+ *       luminance &lt; 0.5; light channels render bare regardless.</li>
  *   <li>Esc / double-click closes; primary-press-and-drag on body moves;
  *       primary-press-and-drag within {@link #EDGE_RESIZE_HOTSPOT_PX} of any
  *       edge/corner resizes.</li>
@@ -99,6 +102,22 @@ public class ChannelLegendStage {
     private static final double OUTLINE_HALO_RADIUS = 2.5;
     /** Halo spread (0-1). Higher = more opaque outline, less feathering. */
     private static final double OUTLINE_HALO_SPREAD = 0.85;
+
+    // ---- Dark-label backdrop tuning (v1.0.8+) ----
+    /**
+     * BT.601 luminance threshold below which a channel color is treated as
+     * dark and gets contrast assistance (outline or panel backdrop). 0.5 is
+     * the simple midpoint; channels just above (e.g. mid-gray) render bare.
+     */
+    private static final double DARK_LUMINANCE_THRESHOLD = 0.5;
+    /**
+     * Per-row backdrop chip CSS for dark channels. Translucent off-white with
+     * a 4 px corner radius and snug padding so each chip hugs the label.
+     */
+    private static final String DARK_PANEL_CHIP_STYLE =
+            "-fx-background-color: rgba(245, 245, 245, 0.88);"
+            + " -fx-background-radius: 4;"
+            + " -fx-padding: 0 6 0 6;";
 
     /** Subtitle is one font-size step smaller than headline. */
     private static final double SUBTITLE_SCALE = 0.65;
@@ -296,11 +315,18 @@ public class ChannelLegendStage {
         lastRows = List.copyOf(rows);
         lastWasEmpty = false;
         boolean outline = ChannelNamesViewerPreferences.getWhiteTextOutline();
+        boolean panel = ChannelNamesViewerPreferences.getDarkLabelPanel();
         for (ChannelRow row : rows) {
             Label label = new Label(row.name());
             label.setTextFill(row.color());
-            if (outline) {
+            boolean dark = isDarkColor(row.color());
+            // Contrast assists apply only to dark channels -- light channels
+            // already read fine against the dark background, and a halo /
+            // panel on every row was visually noisy.
+            if (dark && outline) {
                 label.setEffect(buildWhiteOutlineEffect());
+            } else if (dark && panel) {
+                label.setStyle(DARK_PANEL_CHIP_STYLE);
             }
             label.setMouseTransparent(true); // clicks/drags fall through to scene handlers
             label.fontProperty().bind(Bindings.createObjectBinding(
@@ -309,6 +335,18 @@ public class ChannelLegendStage {
             ));
             content.getChildren().add(label);
         }
+    }
+
+    /**
+     * BT.601 luminance check: returns true when {@code c} is dark enough to
+     * benefit from a contrast assist. Uses the simple perceived-brightness
+     * formula {@code 0.299R + 0.587G + 0.114B} on JavaFX's [0, 1] components
+     * and compares against {@link #DARK_LUMINANCE_THRESHOLD}.
+     */
+    public static boolean isDarkColor(Color c) {
+        if (c == null) return false;
+        double y = 0.299 * c.getRed() + 0.587 * c.getGreen() + 0.114 * c.getBlue();
+        return y < DARK_LUMINANCE_THRESHOLD;
     }
 
     /**
@@ -738,17 +776,40 @@ public class ChannelLegendStage {
                 .addListener((obs, oldVal, newVal) -> preserveOrderItem.setSelected(newVal));
         menu.getItems().add(preserveOrderItem);
 
-        // --- Outline text in white (v1.0.7+) ---
+        // --- Outline dark channels in white (v1.0.7+; v1.0.8 narrowed to dark only) ---
         // Default off: render channel name in the literal channel color. When
-        // on, draw a white halo around each glyph so dark colors stay readable
-        // without changing the channel hue.
-        CheckMenuItem outlineItem = new CheckMenuItem("Outline text in white");
+        // on, draw a white halo around each dark (BT.601 luminance < 0.5) glyph
+        // so dark channels stay readable without changing the channel hue.
+        // Mutually exclusive with the panel-backdrop option below.
+        CheckMenuItem outlineItem = new CheckMenuItem("Outline dark channels in white");
         outlineItem.setSelected(ChannelNamesViewerPreferences.getWhiteTextOutline());
-        outlineItem.selectedProperty().addListener((obs, oldVal, newVal) ->
-                ChannelNamesViewerPreferences.setWhiteTextOutline(newVal));
+        outlineItem.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            ChannelNamesViewerPreferences.setWhiteTextOutline(newVal);
+            // Exclusive with the panel chip -- turn that off when this turns on.
+            if (newVal && ChannelNamesViewerPreferences.getDarkLabelPanel()) {
+                ChannelNamesViewerPreferences.setDarkLabelPanel(false);
+            }
+        });
         ChannelNamesViewerPreferences.whiteTextOutlineProperty()
                 .addListener((obs, oldVal, newVal) -> outlineItem.setSelected(newVal));
         menu.getItems().add(outlineItem);
+
+        // --- Backdrop panel on dark channels (v1.0.8+) ---
+        // Default off. When on, dark channels get a translucent off-white
+        // backdrop chip behind the label so the channel color reads cleanly.
+        // Light channels render bare regardless. Mutually exclusive with the
+        // white-outline option above.
+        CheckMenuItem panelItem = new CheckMenuItem("Backdrop panel on dark channels");
+        panelItem.setSelected(ChannelNamesViewerPreferences.getDarkLabelPanel());
+        panelItem.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            ChannelNamesViewerPreferences.setDarkLabelPanel(newVal);
+            if (newVal && ChannelNamesViewerPreferences.getWhiteTextOutline()) {
+                ChannelNamesViewerPreferences.setWhiteTextOutline(false);
+            }
+        });
+        ChannelNamesViewerPreferences.darkLabelPanelProperty()
+                .addListener((obs, oldVal, newVal) -> panelItem.setSelected(newVal));
+        menu.getItems().add(panelItem);
 
         menu.getItems().add(new SeparatorMenuItem());
 

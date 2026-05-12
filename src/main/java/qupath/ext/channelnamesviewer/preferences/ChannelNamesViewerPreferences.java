@@ -50,14 +50,26 @@ public final class ChannelNamesViewerPreferences {
      */
     private static BooleanProperty preserveChannelOrderProperty;
     /**
-     * Whether channel name text is drawn with a white outline (v1.0.7+).
-     * Default false: text is rendered in the literal channel color (which may
-     * have poor contrast against the dark background -- the user's choice).
-     * When true a white drop-shadow halo is painted around each glyph, keeping
-     * the channel hue intact while making dark-colored channels readable.
-     * Replaces the v1.0.3-v1.0.6 WCAG auto-flip-to-white rule.
+     * Whether dark-colored channel names are drawn with a white outline
+     * (v1.0.7+; v1.0.8 narrowed the gate to dark channels only). Default
+     * false: text is rendered in the literal channel color (which may have
+     * poor contrast against the dark background -- the user's choice). When
+     * true a white drop-shadow halo is painted around each glyph that is
+     * classified as dark (BT.601 luminance < 0.5), keeping the channel hue
+     * intact while making dark-colored channels readable. Replaces the
+     * v1.0.3-v1.0.6 WCAG auto-flip-to-white rule. Mutually exclusive with
+     * {@link #darkLabelPanelProperty} at the UI layer.
      */
     private static BooleanProperty whiteTextOutlineProperty;
+    /**
+     * Whether dark-colored channel names get a translucent light backdrop
+     * chip (v1.0.8+). Default false. Like {@link #whiteTextOutlineProperty}
+     * this only affects channels whose color is classified as dark (BT.601
+     * luminance < 0.5); light channels render bare regardless. The two
+     * presentation prefs are mutually exclusive at the menu layer -- only
+     * one may be enabled at a time.
+     */
+    private static BooleanProperty darkLabelPanelProperty;
 
     private static volatile boolean installed = false;
 
@@ -93,6 +105,8 @@ public final class ChannelNamesViewerPreferences {
                 PREFIX + "preserveChannelOrder", true);
         whiteTextOutlineProperty = PathPrefs.createPersistentPreference(
                 PREFIX + "whiteTextOutline", false);
+        darkLabelPanelProperty = PathPrefs.createPersistentPreference(
+                PREFIX + "darkLabelPanel", false);
 
         installed = true;
         logger.info("Channel Names Viewer preferences installed");
@@ -255,6 +269,20 @@ public final class ChannelNamesViewerPreferences {
     public static BooleanProperty whiteTextOutlineProperty() {
         ensureInstalled();
         return whiteTextOutlineProperty;
+    }
+
+    public static boolean getDarkLabelPanel() {
+        return darkLabelPanelProperty != null && darkLabelPanelProperty.get();
+    }
+
+    public static void setDarkLabelPanel(boolean v) {
+        ensureInstalled();
+        darkLabelPanelProperty.set(v);
+    }
+
+    public static BooleanProperty darkLabelPanelProperty() {
+        ensureInstalled();
+        return darkLabelPanelProperty;
     }
 
     private static void ensureInstalled() {

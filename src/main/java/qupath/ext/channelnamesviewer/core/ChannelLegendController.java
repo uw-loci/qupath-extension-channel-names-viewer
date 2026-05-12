@@ -141,6 +141,8 @@ public class ChannelLegendController {
                 .addListener((obs, oldVal, newVal) -> requestRender());
         ChannelNamesViewerPreferences.whiteTextOutlineProperty()
                 .addListener((obs, oldVal, newVal) -> requestRender());
+        ChannelNamesViewerPreferences.darkLabelPanelProperty()
+                .addListener((obs, oldVal, newVal) -> requestRender());
     }
 
     /** Re-render on the FX thread, hopping over if necessary. */
