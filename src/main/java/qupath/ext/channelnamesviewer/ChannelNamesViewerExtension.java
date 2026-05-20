@@ -1,21 +1,25 @@
 package qupath.ext.channelnamesviewer;
 
 import javafx.application.Platform;
-import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBase;
-import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ToolBar;
 import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCombination;
-import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
+import javafx.scene.paint.Paint;
 import javafx.scene.shape.ClosePath;
 import javafx.scene.shape.LineTo;
 import javafx.scene.shape.MoveTo;
 import javafx.scene.shape.Path;
+import javafx.scene.shape.Rectangle;
 import org.controlsfx.control.action.Action;
+import org.controlsfx.control.decoration.Decorator;
+import org.controlsfx.control.decoration.GraphicDecoration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.channelnamesviewer.core.ChannelLegendController;
@@ -329,57 +333,163 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
         return null;
     }
 
+    /**
+     * Light-theme bar palette: red / green / blue. Vivid against QuPath's
+     * light toolbar background.
+     */
+    private static final Color[] LIGHT_BARS = {
+            Color.web("#cc0000"), Color.web("#00b400"), Color.web("#0a0acc")
+    };
+
+    /**
+     * Dark-theme bar palette: cyan / magenta / yellow. Vivid against QuPath's
+     * dark toolbar background; mirrors the supplied {@code Chext_clear.svg}.
+     */
+    private static final Color[] DARK_BARS = {
+            Color.web("#33ffff"), Color.web("#ff33ff"), Color.web("#ffff33")
+    };
+
     private ButtonBase buildToolbarButton(QuPathGUI qupath) {
-        // Plain text glyph -- no font dependency. The button's tooltip carries the action language.
-        javafx.scene.control.Button button = new javafx.scene.control.Button();
+        // Vector graphic -- no font and no image asset, so it stays crisp at any
+        // display scale. The button's tooltip carries the action language.
+        Button button = new Button();
         button.setTooltip(new Tooltip(resources.getString("tooltip.toolbar")));
         button.setAccessibleText(resources.getString("tooltip.toolbar"));
         button.setOnAction(e -> toggleLegend(qupath));
         // Match QuPath's existing toolbar button sizing.
         button.getStyleClass().add("toolbar-button");
 
-        // Graphic = "Ch" centered + small right-pointing triangle in the bottom-right
-        // corner indicating that right-click reveals additional options. Mirrors the
-        // ContextMenu decoration QuPath uses on its line/polyline tool button.
-        Label chLabel = new Label("Ch");
-        chLabel.setMouseTransparent(true);
-        chLabel.textFillProperty().bind(button.textFillProperty());
+        // Graphic = three rounded "channel" bars (a stylized stack of selected
+        // channels). The bar palette follows the active QuPath theme -- see
+        // buildChannelIcon.
+        button.setGraphic(buildChannelIcon(button));
 
-        Path indicator = new Path(
-                new MoveTo(0, 0),
-                new LineTo(0, 5),
-                new LineTo(5, 2.5),
-                new ClosePath());
-        indicator.setStroke(null);
-        indicator.setOpacity(0.55);
-        indicator.setMouseTransparent(true);
-        indicator.fillProperty().bind(button.textFillProperty());
+        // The small right-click indicator triangle is added as a ControlsFX
+        // GraphicDecoration anchored to the button's bottom-right CORNER -- the
+        // same mechanism QuPath uses for its Line/Polyline tool buttons, so the
+        // triangle sits at the button edge rather than floating inside the icon.
+        addContextMenuDecoration(qupath, button);
 
-        StackPane buttonGraphic = new StackPane(chLabel, indicator);
-        StackPane.setAlignment(chLabel, Pos.CENTER);
-        StackPane.setAlignment(indicator, Pos.BOTTOM_RIGHT);
-        StackPane.setMargin(indicator, new Insets(0, 1, 1, 0));
-        button.setGraphic(buttonGraphic);
-        // Right-click on the toolbar button opens the legend window's settings menu
-        // (background opacity slider, lock-font toggle, reset). Built lazily so the
-        // legend stage exists by the time the menu is requested.
+        // Right-click anywhere on the button also opens the legend window's
+        // settings menu (background opacity, lock-font toggle, reset).
         button.setOnContextMenuRequested(e -> {
-            // Ensure the stage exists; we don't show the legend, just need the stage so
-            // its property values back the menu. Lazily create on first menu open.
-            if (legendStage == null) {
-                legendStage = new ChannelLegendStage(qupath.getStage());
-                controller = new ChannelLegendController(qupath, legendStage);
-                legendStage.getStage().addEventHandler(javafx.stage.WindowEvent.WINDOW_HIDDEN, ev -> {
-                    if (controller != null) {
-                        controller.uninstall();
-                    }
-                });
-                legendStage.installContextMenuOnBody();
-            }
-            javafx.scene.control.ContextMenu menu = legendStage.buildSettingsMenu();
-            menu.show(button, e.getScreenX(), e.getScreenY());
+            showSettingsMenu(qupath, button, e.getScreenX(), e.getScreenY());
             e.consume();
         });
         return button;
+    }
+
+    /**
+     * Add the right-click indicator triangle to the toolbar button as a
+     * ControlsFX {@link GraphicDecoration} anchored at {@link Pos#BOTTOM_RIGHT}.
+     * This mirrors QuPath's own {@code ToolBarComponent.addContextMenuDecoration}
+     * (geometry, rotation and opacity copied verbatim) so the triangle sits at
+     * the button corner -- clear of the icon and flush with the button edge --
+     * rather than floating inside the icon graphic.
+     *
+     * <p>ControlsFX decorations require the node to be in a scene, and are lost
+     * when it leaves one, so the decoration is (re-)applied via a
+     * {@code sceneProperty} listener as well as eagerly on the FX thread.</p>
+     */
+    private void addContextMenuDecoration(QuPathGUI qupath, Button button) {
+        double width = 6;
+        Path triangle = new Path(
+                new MoveTo(0, 0),
+                new LineTo(width, 0),
+                new LineTo(width / 2.0, Math.sqrt(width * width / 2.0)),
+                new ClosePath());
+        triangle.setTranslateX(-width);
+        triangle.setTranslateY(-width);
+        triangle.setRotate(-90);
+        triangle.setStroke(null);
+        triangle.setOpacity(0.5);
+        triangle.fillProperty().bind(button.textFillProperty());
+        triangle.setOnMouseClicked(e -> {
+            showSettingsMenu(qupath, button, e.getScreenX(), e.getScreenY());
+            e.consume();
+        });
+        GraphicDecoration decoration = new GraphicDecoration(triangle, Pos.BOTTOM_RIGHT);
+        button.sceneProperty().addListener((obs, oldScene, newScene) -> Platform.runLater(() -> {
+            if (newScene != null) {
+                Decorator.addDecoration(button, decoration);
+            } else {
+                Decorator.removeDecoration(button, decoration);
+            }
+        }));
+        Platform.runLater(() -> Decorator.addDecoration(button, decoration));
+    }
+
+    /**
+     * Lazily create the legend stage and controller if they do not yet exist,
+     * then show the legend's settings menu at the given screen coordinates.
+     */
+    private void showSettingsMenu(QuPathGUI qupath, Button button, double screenX, double screenY) {
+        // We don't show the legend here, just need the stage so its property
+        // values back the menu. Lazily create on first menu open.
+        if (legendStage == null) {
+            legendStage = new ChannelLegendStage(qupath.getStage());
+            controller = new ChannelLegendController(qupath, legendStage);
+            legendStage.getStage().addEventHandler(javafx.stage.WindowEvent.WINDOW_HIDDEN, ev -> {
+                if (controller != null) {
+                    controller.uninstall();
+                }
+            });
+            legendStage.installContextMenuOnBody();
+        }
+        legendStage.buildSettingsMenu().show(button, screenX, screenY);
+    }
+
+    /**
+     * Build the toolbar button's icon: three rounded horizontal bars stacked
+     * vertically, evoking a stack of selected fluorescence channels. The bar
+     * fills follow the active QuPath theme -- {@link #LIGHT_BARS} (RGB) on the
+     * light theme, {@link #DARK_BARS} (CMY) on the dark theme.
+     *
+     * <p>Theme detection uses the button's text fill: QuPath drives that color
+     * from theme CSS, so a light text fill reliably indicates the dark theme.
+     * The fill is not resolved until the button is in a scene and CSS has run,
+     * so a listener re-applies the palette whenever the text fill changes --
+     * this also handles the user switching themes mid-session.</p>
+     *
+     * @param button the toolbar button whose text fill tracks the theme
+     * @return a mouse-transparent {@link Node} suitable as the button graphic
+     */
+    private static Node buildChannelIcon(Button button) {
+        Rectangle[] bars = new Rectangle[3];
+        VBox stack = new VBox(2.2);
+        stack.setAlignment(Pos.CENTER);
+        stack.setMouseTransparent(true);
+        for (int i = 0; i < bars.length; i++) {
+            Rectangle bar = new Rectangle(14.5, 3.6);
+            bar.setArcWidth(2.6);
+            bar.setArcHeight(2.6);
+            bar.setMouseTransparent(true);
+            bars[i] = bar;
+            stack.getChildren().add(bar);
+        }
+        Runnable applyPalette = () -> {
+            Color[] palette = isDarkTheme(button) ? DARK_BARS : LIGHT_BARS;
+            for (int i = 0; i < bars.length; i++) {
+                bars[i].setFill(palette[i]);
+            }
+        };
+        applyPalette.run();
+        button.textFillProperty().addListener((obs, oldFill, newFill) -> applyPalette.run());
+        return stack;
+    }
+
+    /**
+     * Return true when the supplied button is being rendered under a dark
+     * theme, judged by the luminance of its (theme-driven) text fill. A light
+     * text fill means a dark background.
+     */
+    private static boolean isDarkTheme(Button button) {
+        Paint fill = button.getTextFill();
+        if (fill instanceof Color c) {
+            // BT.601 luminance.
+            double luminance = 0.299 * c.getRed() + 0.587 * c.getGreen() + 0.114 * c.getBlue();
+            return luminance > 0.5;
+        }
+        return false;
     }
 }
