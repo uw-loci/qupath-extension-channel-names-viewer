@@ -14,6 +14,8 @@ This guide walks through the legend window one task at a time. Sections are coll
 
 The window shows what QuPath's brightness/contrast dialog calls the *selected* channels — the ones currently contributing to the viewer. Toggle a channel in brightness/contrast and the legend updates immediately. The window itself is a chromeless rounded translucent panel; everything tunable (background opacity, font lock) lives in a right-click menu rather than a visible controls bar.
 
+![Animated demo over a multiplex fluorescence image in QuPath: the color-coded channel-name legend updates live as channels are toggled in brightness/contrast.](images/channel-names-viewer-live-demo.gif)
+
 ### Three ways to open the window
 
 The launch surfaces, with their tooltip text:

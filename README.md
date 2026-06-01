@@ -31,6 +31,9 @@ After restart you will see the new toolbar button next to QuPath's brightness/co
 1. Open a multiplex / fluorescence image in QuPath.
 2. Open the legend with any of the three launch surfaces: click the toolbar button (labeled `Ch`, with a small triangle in the bottom-right corner indicating an extra menu) next to brightness/contrast, choose **Extensions > Channel Names Viewer...**, or press **Ctrl+Shift+C** (`Cmd+Shift+C` on macOS).
 3. The legend lists the currently-selected channels, each name drawn in its display color.
+
+![Animated demo: a multiplex fluorescence image open in QuPath at 7.48x, with the brightness/contrast toolbar controls; the color-coded channel-name legend updates live as channels are toggled.](docs/images/channel-names-viewer-live-demo.gif)
+
 4. **Move:** drag the body. **Resize:** drag any edge or corner (the cursor changes within ~8 px of an edge). **Close:** double-click the body, press the shortcut again, or press Esc. **Settings:** right-click the body or the toolbar button for a menu with background opacity and a lock-font-size toggle.
 
 ---
