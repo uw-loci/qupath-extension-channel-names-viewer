@@ -29,7 +29,7 @@ After restart you will see the new toolbar button next to QuPath's brightness/co
 ## Quick start
 
 1. Open a multiplex / fluorescence image in QuPath.
-2. Open the legend with any of the three launch surfaces: click the toolbar button (labeled `Ch`, with a small triangle in the bottom-right corner indicating an extra menu) next to brightness/contrast, choose **Extensions > Channel Names Viewer...**, or press **Ctrl+Shift+C** (`Cmd+Shift+C` on macOS).
+2. Open the legend with any of the three launch surfaces: click the toolbar button (the channel-bars icon, three colored bars, with a small triangle in the bottom-right corner indicating an extra menu) next to brightness/contrast, choose **Extensions > Channel Names Viewer...**, or press **Ctrl+Shift+C** (`Cmd+Shift+C` on macOS).
 3. The legend lists the currently-selected channels, each name drawn in its display color.
 
 ![Animated demo: a multiplex fluorescence image open in QuPath at 7.48x, with the brightness/contrast toolbar controls; the color-coded channel-name legend updates live as channels are toggled.](docs/images/channel-names-viewer-live-demo.gif)
@@ -41,7 +41,7 @@ After restart you will see the new toolbar button next to QuPath's brightness/co
 ## Key concepts
 
 - **Selected channels.** The window mirrors what brightness/contrast calls *selected*. Toggle a channel there and the legend updates immediately.
-- **Color coding.** Channel names are drawn in their display colors. A WCAG luminance check switches very dark channels to white so they stay readable on the dark window background.
+- **Color coding.** Channel names are drawn in their display colors. A perceived-brightness (BT.601) luminance check switches very dark channels to white so they stay readable on the dark window background.
 - **Resize-with-text.** No font-size control by default. Drag any edge or corner — text scales with the window. If you want a fixed size (e.g. matched screenshots across different channel counts), use **Lock font size** in the right-click menu.
 - **Right-click for settings.** The window has no chrome and no controls bar. Right-click the toolbar button (without opening the window), or right-click the window body, to access background opacity, lock-font, and reset-opacity.
 - **Image switching.** Open a different image and the legend rebinds automatically. RGB / brightfield images render an empty-state placeholder rather than a crash.
@@ -55,6 +55,16 @@ This extension does not replace [Sara McArdle's `FluorescentChannelNames.groovy`
 ---
 
 ## What's new
+
+**v1.0.9** — Toolbar button icon redesigned from the `Ch` text glyph to a theme-aware three-bar icon.
+
+**v1.0.8** — Dark-channel contrast assist is now gated to dark channels only (BT.601 luminance below the threshold); added an optional "Backdrop panel on dark channels" toggle.
+
+**v1.0.7** — Channel names render in their literal channel color, with an optional white outline for contrast.
+
+**v1.0.6** — Added a "preserve channel order" preference; channel names and colors now update live as you edit them.
+
+**v1.0.5** — Toolbar-button dropdown indicator (the corner triangle) added; documentation refresh.
 
 **v1.0.4** — Real translucent background (the rgba slider was being layered over an opaque pane in v1.0.3, so it only darkened the gray rather than letting the desktop show through). Edge and corner resize on all eight sides; the corner grip indicator was removed.
 
@@ -84,4 +94,4 @@ Toolbar button placement remains best-effort; if QuPath reorganizes its toolbar 
 Apache License 2.0. Copyright 2026 Regents of the University of Wisconsin-Madison. See [LICENSE](LICENSE).
 
 **Author:** Mike Nelson — University of Wisconsin-Madison
-**Version:** 1.0.5
+**Version:** 1.0.9
