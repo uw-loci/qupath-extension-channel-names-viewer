@@ -63,7 +63,7 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
 
     private static final String EXTENSION_NAME = resources.getString("name");
     private static final String EXTENSION_DESCRIPTION = resources.getString("description");
-    private static final Version EXTENSION_QUPATH_VERSION = Version.parse("v0.6.0");
+    private static final Version EXTENSION_QUPATH_VERSION = Version.parse("v0.7.0");
 
     private static final GitHubRepo EXTENSION_REPOSITORY =
             GitHubRepo.create(EXTENSION_NAME, "uw-loci", "qupath-extension-channel-names-viewer");

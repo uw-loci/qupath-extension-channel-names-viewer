@@ -8,7 +8,7 @@ This extension packages [Sara McArdle's `FluorescentChannelNames.groovy`](https:
 
 ## Requirements
 
-- QuPath 0.6.0 or later
+- QuPath 0.7.0 or later
 - JDK 21 (only required if you build from source)
 
 ---
