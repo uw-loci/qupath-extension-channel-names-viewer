@@ -740,6 +740,12 @@ public class ChannelLegendStage {
     public ContextMenu buildSettingsMenu() {
         ContextMenu menu = new ContextMenu();
 
+        List<MenuItem> tools = toolItems.get();
+        if (!tools.isEmpty()) {
+            menu.getItems().addAll(tools);
+            menu.getItems().add(new SeparatorMenuItem());
+        }
+
         // --- Background opacity slider (CustomMenuItem so the slider stays in the menu) ---
         Slider opacitySlider = new Slider(MIN_OPACITY, MAX_OPACITY, backgroundOpacity.get());
         opacitySlider.setPrefWidth(180);
@@ -834,6 +840,16 @@ public class ChannelLegendStage {
         menu.getItems().add(resetItem);
 
         return menu;
+    }
+
+    /** Menu items for the channel tools, put at the top of every settings menu. */
+    private java.util.function.Supplier<List<MenuItem>> toolItems = List::of;
+
+    /**
+     * @param items called for each new settings menu, since a menu item has one parent
+     */
+    public void setToolItems(java.util.function.Supplier<List<MenuItem>> items) {
+        this.toolItems = items != null ? items : List::of;
     }
 
     /**

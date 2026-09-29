@@ -48,6 +48,31 @@ After restart you will see the new toolbar button next to QuPath's brightness/co
 
 ---
 
+## Channel tools
+
+Two tools for multichannel fluorescence display open from **Extensions > Channel Names Viewer**, and from the right-click menu of the toolbar button or the legend window.
+
+### Background-aware auto contrast
+
+QuPath's **Auto** sets each channel's display range from percentiles of all its pixels, so the minimum sits *below* the background. Every channel then paints a little colour over the whole image, and with many channels (an 18-channel Orion panel, say) those contributions add up to a grey haze that hides the cells.
+
+This tool reads the shape of each channel's histogram instead. In a typical marker channel most pixels are background: a tall, narrow peak at a low value, whose rising (left) edge is pure noise. The tool finds that peak, measures its noise width from the rising edge, and puts the display **minimum** that many noise widths above the peak (3 by default, adjustable), so background renders black. The **maximum** is set so a small percentage of the pixels above the minimum saturate (0.5% by default).
+
+- Pixels are sampled at full resolution from a 6 x 6 grid of tiles across the image (about a million per channel), so the noise width is the one you see when zoomed in; a downsampled read averages noise away and would set the minimum too low.
+- A channel whose tallest peak is not a narrow background peak -- a dense nuclear stain covering a solid tissue field -- falls back to percentiles, and the table says so.
+- Each channel's row shows its histogram with the background peak (grey), minimum (orange) and maximum (blue) marked.
+- Ranges apply to the viewer as you change the settings; **Revert** restores the ranges the channels had before. **Resample** re-reads the pixels after moving to another z-slice or timepoint.
+
+On the 18-channel Orion crop used to test it, QuPath's Auto placed each channel's background at 1.5-15% of display brightness; with the background-aware minimum, the share of near-white pixels in the 18-channel composite fell from 95% to 35%.
+
+### Channel color wheel
+
+Colours the visible channels with evenly spaced hues around a colour wheel -- one spoke per channel, 360/N degrees apart. Drag any spoke to rotate all the colours together. The wheel can be **HSV** (with a Value control) or **CIELAB** (perceptually uniform, at a chosen lightness L*, using the most saturated in-gamut colour for each hue). **Spread neighbouring channels apart** gives channels listed next to each other colours far apart on the wheel. Like Brightness/Contrast, colours apply as you change them; **Revert** restores the colours the channels had when the window opened, and **Copy script** copies a Groovy `setChannelColors(...)` script for other images with the same channels.
+
+The colour wheel is a port of Sara McArdle's [Channel Color Chooser](https://saramcardle.github.io/ColorWheelPicker/) (MIT License).
+
+---
+
 ## Coexistence with the original Groovy script
 
 This extension does not replace [Sara McArdle's `FluorescentChannelNames.groovy`](https://github.com/saramcardle/Image-Analysis-Scripts/blob/master/QuPath%20Groovy%20Scripts/FluorescentChannelNames.groovy). Both can be installed at once — they create independent JavaFX windows and do not conflict. Keep using the script if you have customized it or wired it into automation; otherwise the extension adds discoverability (toolbar / menu / shortcut), resize-with-text scaling, clean rebinding on image switch, an RGB empty state, listener cleanup, persisted position/size/opacity/lock-state, and a right-click settings menu. Sara's script does not register a global accelerator at all, so `Cmd/Ctrl+Shift+C` is exclusive to the extension. Full discussion in the [user guide](docs/user-guide.md).
@@ -55,6 +80,8 @@ This extension does not replace [Sara McArdle's `FluorescentChannelNames.groovy`
 ---
 
 ## What's new
+
+**v1.1.0** — New channel tools: background-aware auto contrast (display minimum set from each channel's background peak, removing the haze many channels add up to) and a channel colour wheel (port of Sara McArdle's Channel Color Chooser). See [Channel tools](#channel-tools).
 
 **v1.0.9** — Toolbar button icon redesigned from the `Ch` text glyph to a theme-aware three-bar icon.
 

@@ -24,7 +24,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.channelnamesviewer.core.ChannelLegendController;
 import qupath.ext.channelnamesviewer.preferences.ChannelNamesViewerPreferences;
+import qupath.ext.channelnamesviewer.ui.AutoContrastWindow;
 import qupath.ext.channelnamesviewer.ui.ChannelLegendStage;
+import qupath.ext.channelnamesviewer.ui.ColorWheelWindow;
 import qupath.lib.common.Version;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.actions.ActionTools;
@@ -32,6 +34,7 @@ import qupath.lib.gui.actions.CommonActions;
 import qupath.lib.gui.extensions.GitHubProject;
 import qupath.lib.gui.extensions.QuPathExtension;
 
+import java.util.List;
 import java.util.ResourceBundle;
 
 /**
@@ -130,8 +133,31 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
         // does not show tooltips on MenuItem directly, but we attach for parity.
         item.getProperties().put("tooltip", resources.getString("tooltip.menu"));
         extensionMenu.getItems().add(item);
+        extensionMenu.getItems().addAll(toolItems(qupath));
         logger.info("Registered menu item: Extensions > {}", EXTENSION_NAME);
         return item;
+    }
+
+    private AutoContrastWindow autoContrastWindow;
+    private ColorWheelWindow colorWheelWindow;
+
+    /** New menu items opening the channel tools; one set per menu. */
+    private List<MenuItem> toolItems(QuPathGUI qupath) {
+        MenuItem contrast = new MenuItem(resources.getString("menu.autoContrast"));
+        contrast.setOnAction(e -> {
+            if (autoContrastWindow == null) {
+                autoContrastWindow = new AutoContrastWindow(qupath);
+            }
+            autoContrastWindow.show();
+        });
+        MenuItem wheel = new MenuItem(resources.getString("menu.colorWheel"));
+        wheel.setOnAction(e -> {
+            if (colorWheelWindow == null) {
+                colorWheelWindow = new ColorWheelWindow(qupath);
+            }
+            colorWheelWindow.show();
+        });
+        return List.of(contrast, wheel);
     }
 
     private void bindAccelerator(QuPathGUI qupath, MenuItem menuItem) {
@@ -175,6 +201,7 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
             });
             // Right-click on the window body opens the same settings menu as the toolbar button.
             legendStage.installContextMenuOnBody();
+            legendStage.setToolItems(() -> toolItems(qupath));
         }
         if (legendStage.isShowing()) {
             legendStage.hide();
@@ -435,6 +462,7 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
                 }
             });
             legendStage.installContextMenuOnBody();
+            legendStage.setToolItems(() -> toolItems(qupath));
         }
         legendStage.buildSettingsMenu().show(button, screenX, screenY);
     }
