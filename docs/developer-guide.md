@@ -13,23 +13,38 @@ cd qupath-extension-channel-names-viewer
 
 The output jar is at `build/libs/qupath-extension-channel-names-viewer-{version}-all.jar`.
 
-JDK 21 is required. If your default JDK is newer or older, set `JAVA_HOME` or pass `-Dorg.gradle.java.home=/path/to/jdk21` on the gradle command line.
+JDK 21 or newer is required; the build is tested on JDK 25 (Gradle 9.2.1 wrapper). To use a specific JDK, set `JAVA_HOME` or pass `-Dorg.gradle.java.home=/path/to/jdk` on the Gradle command line.
 
-Run unit tests with `./gradlew test`. Tests run on JavaFX; CI / headless invocations need the standard `--add-modules` and `-Dprism.order=sw` JVM args called out in the team's `REFERENCES.md` Part B.
+Run unit tests with `./gradlew test`. The tests do not start the JavaFX toolkit, so no extra JVM arguments are needed.
 
 </details>
 
 <details>
 <summary><strong>Architecture overview</strong></summary>
 
-Three top-level classes plus one preferences class, all under `qupath.ext.channelnamesviewer`:
+All classes are under `qupath.ext.channelnamesviewer`.
 
-- **`ChannelNamesViewerExtension`** — `QuPathExtension` entry point. Registers the menu item under `Extensions`, binds the keyboard accelerator (`shortcut+shift+c`), and inserts the toolbar button next to brightness/contrast. The toolbar button uses a `StackPane` graphic (`"Ch"` label + a small right-pointing `Path` triangle in the bottom-right corner) to signal that right-click reveals the settings menu, mirroring QuPath's tool-button convention. Owns the singleton `ChannelLegendStage` instance and toggles its visibility on each launch-surface activation; the right-click handler on the toolbar button lazily constructs the stage so the menu can be opened without showing the window.
-- **`core.ChannelLegendController`** — listener lifecycle. Binds to `imageDataProperty`, `viewerProperty`, and `imageDisplay.selectedChannels()`. Rebinds on image switch and viewer switch. Owns the empty-state branching (no image / RGB image / no selected channels). Renders the channel rows into the stage's content `VBox`.
-- **`ui.ChannelLegendStage`** — the JavaFX `Stage` (`StageStyle.TRANSPARENT`, scene fill `Color.TRANSPARENT`). The root `StackPane` paints the rounded translucent fill (`rgba(0, 0, 0, opacity)` + `-fx-background-radius: 10`); the inner `content` `VBox` is explicitly transparent so it does not fight the root background. Owns the height-driven font binding (`clamp((height - 30) / rowCount * 0.7, 10pt, 72pt)`), edge/corner resize on all 8 sides via scene-level mouse handlers (8 px hot zone), drag-to-move on the body, the right-click context menu, and persistence of geometry / lock state / locked font pt / opacity.
-- **`preferences.ChannelNamesViewerPreferences`** — `DoubleProperty` / `BooleanProperty` keys for `windowX`, `windowY`, `windowWidth`, `windowHeight` (sentinel `-1.0` meaning "no saved value"), `fontLocked` (boolean), `lockedFontPt` (double, default 20.0), and `backgroundOpacity` (double, default 0.75). Pattern source: `qupath-extension-confusion-matrix/preferences/CMPreferences.java`.
+## Entry point
 
-A machine-readable `codemap/codemap.json` is generated for v1.0 and committed to the repo. Use it to navigate dependencies between subpackages.
+- **`ChannelNamesViewerExtension`** — `QuPathExtension` entry point. Builds the **Extensions > Channel Names Viewer** submenu (the legend item, a separator, and the three tool items), binds the keyboard accelerator (`shortcut+shift+c`), and inserts the toolbar button next to Brightness/Contrast. Owns the singleton `ChannelLegendStage` and the three tool windows, each created on first use. The right-click handler on the toolbar button builds the stage lazily, so the menu can open without showing the legend.
+
+## Legend
+
+- **`core.ChannelLegendController`** — listener lifecycle. Binds to `imageDataProperty`, `viewerProperty`, and `imageDisplay.selectedChannels()`. Rebinds on image switch and viewer switch. Owns the empty-state branching (no image / RGB image / no selected channels) and channel ordering (`orderChannels`, for **Preserve channel order**).
+- **`ui.ChannelLegendStage`** — the JavaFX `Stage` (`StageStyle.TRANSPARENT`, scene fill `Color.TRANSPARENT`). The root `StackPane` paints the rounded translucent fill (`rgba(0, 0, 0, opacity)` + `-fx-background-radius: 10`); the inner `content` `VBox` is transparent so it does not fight the root background. Owns the height-driven font binding (`clamp((height - 30) / rowCount * 0.7, 10pt, 72pt)`), edge/corner resize on all 8 sides via scene-level mouse handlers (8 px hot zone), drag-to-move, the right-click settings menu (`buildSettingsMenu`: a **Channel tools** section filled by the extension through `setToolItems`, then a **Legend window** section), the dark-channel options (BT.601 luminance below 0.5), and persistence of geometry / lock state / locked font pt / opacity.
+
+## Channel tools
+
+- **`core.BackgroundContrast`** — pure function from sampled pixel values to a display range. A full-range histogram (one bin per value for integer data that fits in 65,536 bins), a coarse pass over 2,048 bins to find the tallest peak, then a re-measurement on bins sized to the peak (never narrower than the data's own bins). Noise is the half width at half maximum of the peak's low side divided by sqrt(2 ln 2), measured from the peak's centroid; the high side is used when the peak sits against the lowest value. Falls back to percentiles when the peak is broad (noise above 0.2 × (99.9th percentile − background)) or the maximum would not exceed the minimum. A narrow peak with under 0.2% of pixels above the minimum is kept, with `empty` set.
+- **`core.ChannelSampler`** — reads full-resolution pixels for every channel from a 6 × 6 grid of 170 px tiles (the whole image if it is smaller), at the given z and t.
+- **`core.WheelColors`** — HSV and CIELAB wheel colors (D65 white, sRGB matrix and gamma; maximum in-gamut chroma per hue at a fixed L*; hue offset 40 degrees so red is near the top), spoke angles, and the spread order (greedy: each channel takes the free spoke farthest from the previous one). Ported from Sara McArdle's MIT-licensed Channel Color Chooser; see `THIRD-PARTY-NOTICES.md`.
+- **`ui.AutoContrastWindow`**, **`ui.ColorWheelWindow`**, **`ui.ChannelGridWindow`** — the three tool windows. All are owned by the QuPath window and non-modal. The color wheel sets channel LUTs and calls `saveChannelColorProperties()` while you drag (which repaints the viewer), then writes the colors to the image metadata on release, as Brightness/Contrast does. The grid viewer paints each panel through the main viewer's `DefaultImageRegionStore.paintRegion` with its own `AbstractImageRenderer`, which calls `ImageDisplay.applyTransforms` for one channel (or a preset's own `DirectServerChannelInfo` copies) in the chosen mode. The renderer's change timestamp adds a local counter for grayscale and preset changes, because the region store caches rendered tiles by `getUniqueID()`. The grid polls the project's `resources/display` folder every 2 seconds for preset changes; QuPath fires no event for them.
+- **`ui.Tooltips`** — tooltip helpers. JavaFX menu items have no tooltip property, so `Tooltips.on` stores the text on the item and `Tooltips.install` installs it on the item's node each time its menu is shown. Also provides the bold section headings and the tooltip with a picture (`histogram-legend.png`).
+
+## Preferences
+
+- **`preferences.ChannelNamesViewerPreferences`** — legend settings, prefix `channelnamesviewer.`: `windowX`, `windowY`, `windowWidth`, `windowHeight` (sentinel `-1.0` meaning "no saved value"), `fontLocked`, `lockedFontPt` (default 20.0), `backgroundOpacity` (default 0.75), `preserveChannelOrder` (default true), `whiteTextOutline` and `darkLabelPanel` (default false).
+- **`preferences.ChannelToolsPreferences`** — tool settings, prefix `channelnamesviewer.tools.`: `noiseMultiple` (3.0), `saturatedPercent` (0.5), `allChannels`; `wheelMode` (HSV), `wheelValue` (1.0), `wheelLightness` (65), `wheelSpread`; and the grid's `grid.panels`, `grid.sync`, `grid.downsample`, `grid.merged`, `grid.grayscale`, `grid.names`, `grid.cursor`, `grid.overlays`.
 
 </details>
 
@@ -88,7 +103,7 @@ The button is inserted by walking `qupath.getToolBar().getItems()`, finding the 
 
 The `Action`-reference identity check is locale-stable; tooltip-text matching is fragile because the brightness/contrast button's tooltip is resource-bundle-driven and varies by locale. Reference precedents for the toolbar-mutation pattern: `qupath-extension-wizard-wand/WizardWandExtension.java` and `qupath-extension-polyline-wand/PolylineWandExtension.java`.
 
-The button's graphic is a `StackPane` containing a `Label("Ch")` centered and a small right-pointing `Path` triangle (5 px, 0.55 opacity, fill bound to `button.textFillProperty()` so it tracks light / dark themes) anchored bottom-right. This mirrors the affordance QuPath itself uses on its line / polyline tool button (see `ToolBarComponent#addContextMenuDecoration`); we picked an inline `StackPane` graphic over the ControlsFX `Decorator` API used there because the `Decorator` path requires juggling scene-listener and graphic-property listeners to keep the decoration stable across `setGraphic` calls. With everything baked into the graphic itself the decoration cannot drift.
+The button's graphic is three rounded bars (`buildChannelIcon`; red, green and blue on the light theme, cyan, magenta and yellow on the dark theme). The right-click triangle is a ControlsFX `GraphicDecoration` at `BOTTOM_RIGHT` (a 6 px triangle at opacity 0.5), re-applied when the button's scene changes. This mirrors `ToolBarComponent#addContextMenuDecoration` in QuPath, which draws the same affordance on its line / polyline tool button.
 
 The right-click handler on the button calls `legendStage.buildSettingsMenu()` and shows it anchored to the button — without showing the legend window itself. The legend stage is constructed lazily on first right-click if the user has not yet opened the legend.
 
@@ -115,7 +130,7 @@ Linux compositors that lack a compositor-side alpha channel (some pure-X11 setup
 The controller renders one of three empty-state placeholders when no channels are available:
 
 - **No image is open** (`viewer.getImageData() == null`): headline *No fluorescence channels*, subtitle *(open an image to see its channels)*.
-- **Active image is RGB** (`imageData.getServer().isRGB() == true`) or has no channels selected: headline *No fluorescence channels*, subtitle *(image is RGB or has no channels selected)*.
+- **Active image is RGB** (`imageData.getServer().isRGB() == true`): headline *No fluorescence channels*, subtitle *(this image is RGB; channels do not apply)*.
 - **Image is fluorescence with zero channels selected**: headline *No fluorescence channels*, subtitle *(open Brightness/Contrast and select channels)*.
 
 All three use the same font-binding as channel rows. Subtitles use a slightly smaller multiplier (`fontSize * 0.65`) for visual hierarchy. Light-gray text (`rgb(180, 180, 180)`) on the dark background, not the channel-color logic.
@@ -144,12 +159,12 @@ If a future contributor identifies a use case for a `ChannelNamesViewerScripts.s
 
 Tests cover:
 
-- **Listener cleanup**: count of listeners attached to `imageDisplay.selectedChannels()` after N image switches stays at one.
-- **Font binding**: clamp at minimum and maximum bounds; `min(width, height)` aspect handling.
-- **Channel rendering**: against a mock `ImageDisplay` with a known set of `ChannelDisplayInfo` instances; verifies row count, label text, and text fill (channel display color or white-fallback for low-luminance channels).
-- **Empty-state branching**: each of the three subtitles is rendered for the corresponding cause.
+- **`ChannelLegendControllerTest`**: listener attach/detach across image and viewer switches; channel ordering with **Preserve channel order** on and off; names keep their literal channel color.
+- **`ChannelNamesViewerPreferencesTest`**: preference sentinels and round-trips.
+- **`BackgroundContrastTest`**: background peak and noise on synthetic data, the noise multiple, the dense-stain fallback, a channel with no signal, the zero-padding spike, background clipped at zero, float data, and low noise beside very bright signal.
+- **`WheelColorsTest`**: spoke spacing, HSV primaries, equal CIELAB lightness across hues, and the spread order.
 
-Tests are pure JavaFX with a mocked QuPath surface — no running QuPath instance required. JVM args for headless JavaFX (per `REFERENCES.md` Part B) are configured in `build.gradle.kts`.
+The tests do not start the JavaFX toolkit and need no running QuPath instance.
 
 </details>
 
@@ -176,6 +191,6 @@ Tag conventions: `v{major}.{minor}.{patch}` (for example, `v1.0.0`). The maintai
 
 Release artifact: `build/libs/qupath-extension-channel-names-viewer-{version}-all.jar` from `./gradlew shadowJar`. Attach to the GitHub Release.
 
-This extension is distributed as a manual jar drop via GitHub Releases, not through a QuPath extension catalog.
+Releases are listed in the [`uw-loci/qupath-catalog-mikenelson`](https://github.com/uw-loci/qupath-catalog-mikenelson) extension catalog. This repository has no `notify-catalog` workflow, so after each release, prepend the new release to that catalog's `catalog.json` by hand, keeping every earlier entry so installed versions can still be matched for updates. Set `version_range.min` to `v0.7.0`, the version the extension requires.
 
 </details>

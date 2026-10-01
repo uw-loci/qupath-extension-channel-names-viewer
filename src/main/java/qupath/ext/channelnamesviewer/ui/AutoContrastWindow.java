@@ -90,7 +90,7 @@ public class AutoContrastWindow {
         stage.initOwner(qupath.getStage());
         stage.initModality(Modality.NONE);
         stage.setTitle(TITLE);
-        stage.setScene(new Scene(buildContent(), 940, 560));
+        stage.setScene(new Scene(buildContent(), 1000, 560));
         stage.setOnHidden(e -> qupath.imageDataProperty().removeListener(imageListener));
         stage.setOnShown(e -> qupath.imageDataProperty().addListener(imageListener));
     }
@@ -263,7 +263,7 @@ public class AutoContrastWindow {
             return new javafx.beans.property.SimpleStringProperty(
                     Double.isNaN(v) ? "-" : v >= 100 ? String.format("%.0f", v) : String.format("%.3g", v));
         });
-        col.setPrefWidth(84);
+        col.setPrefWidth(94);
         col.setStyle("-fx-alignment: CENTER-RIGHT;");
         return col;
     }

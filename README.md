@@ -1,100 +1,102 @@
 # QuPath Extension: Channel Names Viewer
 
-A small always-visible legend window for [QuPath](https://qupath.github.io/) that lists the currently-selected fluorescence channels, color-coded by display color, and updates live as you toggle channels in QuPath's brightness/contrast dialog. The window resizes freely and the channel-name text scales with the window so you can shrink the legend out of the way on a laptop or blow it up for a presentation.
+A small always-visible legend window for [QuPath](https://qupath.github.io/) that lists the currently selected fluorescence channels, each name in its display color, and updates live as you toggle channels in QuPath's Brightness/Contrast dialog. The window resizes freely and the text scales with it, so you can shrink the legend out of the way on a laptop or blow it up for a presentation.
 
-This extension packages [Sara McArdle's `FluorescentChannelNames.groovy`](https://github.com/saramcardle/Image-Analysis-Scripts/blob/master/QuPath%20Groovy%20Scripts/FluorescentChannelNames.groovy) (originally written by Pete Bankhead at the 2022 QuPath Hackathon) as a real extension with a toolbar button, menu item, and keyboard accelerator, plus polish around image switching, RGB-image handling, and listener cleanup.
+Version 1.1.0 adds three channel tools for multichannel fluorescence: [background-aware auto contrast](#background-aware-auto-contrast), a [channel color wheel](#channel-color-wheel), and a [channel grid viewer](#channel-grid-viewer).
+
+This extension packages [Sara McArdle's `FluorescentChannelNames.groovy`](https://github.com/saramcardle/Image-Analysis-Scripts/blob/master/QuPath%20Groovy%20Scripts/FluorescentChannelNames.groovy) (originally written by Pete Bankhead at the 2022 QuPath Hackathon) as a real extension with a toolbar button, menu item, and keyboard shortcut, plus handling for image switching, RGB images, and listener cleanup.
 
 ---
 
 ## Requirements
 
 - QuPath 0.7.0 or later
-- JDK 21 (only required if you build from source)
+- JDK 21 or newer, only if you build from source (the build is tested on JDK 25)
 
 ---
 
 ## Installation
 
-For v1.0 the extension is distributed as a single jar:
+**From the extension catalog (recommended).** In QuPath, open **Extensions > Manage extensions**, add the catalog `https://github.com/uw-loci/qupath-catalog-mikenelson`, and install **Channel Names Viewer**. To update later, click the extension's gear icon (tooltip "Update extension") and choose the new version. After a new release, allow about 5 minutes before QuPath sees it, then restart QuPath.
+
+**Manually:**
 
 1. Download `qupath-extension-channel-names-viewer-{version}-all.jar` from the [Releases page](https://github.com/uw-loci/qupath-extension-channel-names-viewer/releases).
-2. Drag the jar onto a running QuPath window.
-3. When QuPath asks whether to copy the jar into your extensions folder, accept.
-4. **Restart QuPath.** This step is required — QuPath copies the jar but does not load new extensions on the fly, so the toolbar button, menu entry, and keyboard shortcut will not appear until QuPath is fully restarted.
+2. Drag the jar onto a running QuPath window, and accept when QuPath offers to copy it into your extensions folder.
+3. **Restart QuPath.** QuPath does not load new extensions without a restart.
 
-After restart you will see the new toolbar button next to QuPath's brightness/contrast button, a new menu entry under **Extensions > Channel Names Viewer...**, and the keyboard shortcut `Ctrl+Shift+C` (`Cmd+Shift+C` on macOS) ready to open the legend.
+After the restart you will see:
+- a new toolbar button (three colored bars) next to QuPath's Brightness/Contrast button;
+- a new menu, **Extensions > Channel Names Viewer**;
+- the keyboard shortcut `Ctrl+Shift+C` (`Cmd+Shift+C` on macOS).
+
+> **Note:** v1.1.0 is not released yet; the current release is v1.0.9, which has the legend but not the channel tools.
 
 ---
 
 ## Quick start
 
-1. Open a multiplex / fluorescence image in QuPath.
-2. Open the legend with any of the three launch surfaces: click the toolbar button (the channel-bars icon, three colored bars, with a small triangle in the bottom-right corner indicating an extra menu) next to brightness/contrast, choose **Extensions > Channel Names Viewer...**, or press **Ctrl+Shift+C** (`Cmd+Shift+C` on macOS).
-3. The legend lists the currently-selected channels, each name drawn in its display color.
+1. Open a multiplex or fluorescence image in QuPath.
+2. Open the legend: click the toolbar button, choose **Extensions > Channel Names Viewer > Channel Names Viewer...**, or press **Ctrl+Shift+C**.
+3. The legend lists the selected channels, each name in its display color.
 
-![Animated demo: a multiplex fluorescence image open in QuPath at 7.48x, with the brightness/contrast toolbar controls; the color-coded channel-name legend updates live as channels are toggled.](docs/images/channel-names-viewer-live-demo.gif)
+![Animated demo, recorded with v1.0.9: a multiplex fluorescence image in QuPath; the color-coded channel-name legend updates live as channels are toggled.](docs/images/channel-names-viewer-live-demo.gif)
 
-4. **Move:** drag the body. **Resize:** drag any edge or corner (the cursor changes within ~8 px of an edge). **Close:** double-click the body, press the shortcut again, or press Esc. **Settings:** right-click the body or the toolbar button for a menu with background opacity and a lock-font-size toggle.
+| To | Do this |
+|---|---|
+| Move the legend | Drag its body |
+| Resize it | Drag any edge or corner (the cursor changes within about 8 px of an edge) |
+| Close it | Double-click it, press Esc, or press the shortcut again |
+| Change settings | Right-click the legend or the toolbar button |
 
 ---
 
 ## Key concepts
 
-- **Selected channels.** The window mirrors what brightness/contrast calls *selected*. Toggle a channel there and the legend updates immediately.
-- **Color coding.** Channel names are drawn in their display colors. A perceived-brightness (BT.601) luminance check switches very dark channels to white so they stay readable on the dark window background.
-- **Resize-with-text.** No font-size control by default. Drag any edge or corner — text scales with the window. If you want a fixed size (e.g. matched screenshots across different channel counts), use **Lock font size** in the right-click menu.
-- **Right-click for settings.** The window has no chrome and no controls bar. Right-click the toolbar button (without opening the window), or right-click the window body, to access background opacity, lock-font, and reset-opacity.
-- **Image switching.** Open a different image and the legend rebinds automatically. RGB / brightfield images render an empty-state placeholder rather than a crash.
+- **Selected channels.** The legend mirrors the channels selected in Brightness/Contrast. Toggle a channel there and the legend updates.
+- **Color coding.** Channel names keep their display colors, even dark ones. For a dark channel such as a pure-blue DAPI, turn on **Outline dark channels in white** or **Backdrop panel on dark channels** in the right-click menu.
+- **Text scales with the window.** Drag an edge or corner and the text follows. For a fixed size (for example, matched screenshots), use **Lock font size**.
+- **The right-click menu** has two sections: **Channel tools** opens the three tools, and **Legend window** holds the legend's own settings.
+
+![The legend's right-click menu, with a Channel tools section (auto contrast, color wheel, grid viewer) above a Legend window section (background opacity, channel order, dark-channel options, font lock, reset).](docs/images/Docs_Legend_SettingsMenu.png)
 
 ---
 
 ## Channel tools
 
-Three tools for multichannel fluorescence display open from **Extensions > Channel Names Viewer**, and from the right-click menu of the toolbar button or the legend window.
+Open these from **Extensions > Channel Names Viewer**, or from the **Channel tools** section of the right-click menu. The [user guide](docs/user-guide.md#channel-tools) has step-by-step instructions, every setting, and troubleshooting.
 
 ### Background-aware auto contrast
 
-QuPath's **Auto** sets each channel's display range from percentiles of all its pixels, so the minimum sits *below* the background. Every channel then paints a little colour over the whole image, and with many channels (an 18-channel Orion panel, say) those contributions add up to a grey haze that hides the cells.
+QuPath's **Auto** sets each channel's display range from percentiles of all its pixels, which puts the minimum *below* the background. Each channel then adds a little color everywhere, and with many channels that adds up to a haze over the cells. This tool sets each channel's **minimum** just above its background peak (by default, background + 3 × noise), so background shows as black, and its **maximum** from the brightest pixels above that.
 
-This tool reads the shape of each channel's histogram instead. In a typical marker channel most pixels are background: a tall, narrow peak at a low value, whose rising (left) edge is pure noise. The tool finds that peak, measures its noise width from the rising edge, and puts the display **minimum** that many noise widths above the peak (3 by default, adjustable), so background renders black. The **maximum** is set so a small percentage of the pixels above the minimum saturate (0.5% by default).
+![The same area of an 18-channel Orion image with the five channels whose background moved most: with QuPath Auto, an olive haze covers the tissue; with background-aware auto contrast, the background is black and cell membranes stand out.](docs/images/Docs_AutoContrast_BeforeAfter.png)
 
-- Pixels are sampled at full resolution from a 6 x 6 grid of tiles across the image (about a million per channel), so the noise width is the one you see when zoomed in; a downsampled read averages noise away and would set the minimum too low.
-- A channel whose tallest peak is not a narrow background peak -- a dense nuclear stain covering a solid tissue field -- falls back to percentiles, and the table says so.
-- Each channel's row shows its histogram with the background peak (grey), minimum (orange) and maximum (blue) marked.
-- Ranges apply to the viewer as you change the settings; **Revert** restores the ranges the channels had before. **Resample** re-reads the pixels after moving to another z-slice or timepoint.
-
-On the 18-channel Orion crop used to test it, QuPath's Auto placed each channel's background at 1.5-15% of display brightness; with the background-aware minimum, the share of near-white pixels in the 18-channel composite fell from 95% to 35%.
+Opening the window applies the ranges at once; **Revert** restores the previous ones. Only display ranges change: pixel values and measurements are not affected.
 
 ### Channel color wheel
 
-Colours the visible channels with evenly spaced hues around a colour wheel -- one spoke per channel, 360/N degrees apart. Drag any spoke to rotate all the colours together. The wheel can be **HSV** (with a Value control) or **CIELAB** (perceptually uniform, at a chosen lightness L*, using the most saturated in-gamut colour for each hue). **Spread neighbouring channels apart** gives channels listed next to each other colours far apart on the wheel. Like Brightness/Contrast, colours apply as you change them; **Revert** restores the colours the channels had when the window opened, and **Copy script** copies a Groovy `setChannelColors(...)` script for other images with the same channels.
-
-The colour wheel is a port of Sara McArdle's [Channel Color Chooser](https://saramcardle.github.io/ColorWheelPicker/) (MIT License).
+Gives the visible channels evenly spaced colors around a color wheel, one spoke per channel. Drag any spoke to rotate them all. The wheel is a port of Sara McArdle's [Channel Color Chooser](https://saramcardle.github.io/ColorWheelPicker/) (MIT License; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)).
 
 ### Channel grid viewer
 
-A grid of panels, one per visible channel (or every channel), plus the merged image, that follow the main viewer -- like QuPath's own **View > Channel viewer**, with grayscale display that does not change the main viewer:
-
-- **Panels...** chooses what the grid shows: the **visible channels** (following the main viewer), **all channels**, or **one per display preset** -- a tile for every display preset saved in the project, so groups such as "T cells" and "Tumor" sit side by side as you pan. Presets saved, changed or deleted while the grid is open show up within a couple of seconds. Only presets that fit the current image are offered -- QuPath's own test, the same channels by number and name as the image they were saved from -- so a preset made for another panel of markers never appears.
-- **Remove from grid** (right-click any panel) takes a channel, preset or the merged image out of the grid without changing the main viewer; **Restore removed panels** brings them back. Removed panels stay removed when you switch images.
-- **Use ... in main viewer** (first item of a panel's right-click menu) shows that panel's channel -- or its preset -- in the main viewer. The grid keeps its panels, so you can switch the main viewer between them. A menu item rather than a click, so a stray click does nothing.
-- **Show a display preset in a panel:** below that, pick the panel's own channel or any display preset saved in the project (Brightness/Contrast > save settings). The panel then shows that preset's channels, colours and ranges, so channel groups sit side by side as you pan -- without changing the main viewer.
-- **All channels in grayscale** (bottom of the right-click menu) shows every channel panel in grayscale; **This channel in grayscale** does it for the panel you right-clicked. Grayscale is often easier to read than a dark channel colour such as blue. The merged panel and the main viewer keep their colours.
-- **Sync to** the cursor, the viewer centre or the selected object (or not at all); hold **Shift** to freeze the cursor sync. **Zoom** sets the magnification, or **Same as main viewer**.
-- Panels use the main viewer's display ranges and colours, so Brightness/Contrast and the background-aware auto contrast show up immediately.
-- **Show merged image**, **Show channel names**, **Show cursor** and **Show overlays** as in QuPath's channel viewer.
+A grid of panels that follow the main viewer as you pan, like QuPath's **View > Show channel viewer**, with extra options:
+- show any channel, or all of them, in grayscale without changing the main viewer;
+- give each saved display preset its own tile, such as "T cells" next to "Tumor";
+- put a panel's channel or preset into the main viewer from the panel's right-click menu;
+- remove panels you do not need.
 
 ---
 
 ## Coexistence with the original Groovy script
 
-This extension does not replace [Sara McArdle's `FluorescentChannelNames.groovy`](https://github.com/saramcardle/Image-Analysis-Scripts/blob/master/QuPath%20Groovy%20Scripts/FluorescentChannelNames.groovy). Both can be installed at once — they create independent JavaFX windows and do not conflict. Keep using the script if you have customized it or wired it into automation; otherwise the extension adds discoverability (toolbar / menu / shortcut), resize-with-text scaling, clean rebinding on image switch, an RGB empty state, listener cleanup, persisted position/size/opacity/lock-state, and a right-click settings menu. Sara's script does not register a global accelerator at all, so `Cmd/Ctrl+Shift+C` is exclusive to the extension. Full discussion in the [user guide](docs/user-guide.md).
+This extension does not replace [Sara McArdle's `FluorescentChannelNames.groovy`](https://github.com/saramcardle/Image-Analysis-Scripts/blob/master/QuPath%20Groovy%20Scripts/FluorescentChannelNames.groovy). Both can be installed at once; they create independent windows and do not conflict. The [user guide](docs/user-guide.md) lists what the extension adds.
 
 ---
 
 ## What's new
 
-**v1.1.0** — New channel tools: background-aware auto contrast (display minimum set from each channel's background peak, removing the haze many channels add up to), a channel colour wheel (port of Sara McArdle's Channel Color Chooser), and a channel grid viewer that can show any or all channels in grayscale without changing the main viewer. See [Channel tools](#channel-tools).
+**v1.1.0** (unreleased) — Channel tools: background-aware auto contrast, a channel color wheel (port of Sara McArdle's Channel Color Chooser), and a channel grid viewer with grayscale panels and display-preset tiles. The right-click menu is now split into Channel tools and Legend window sections, and every menu item has a tooltip.
 
 **v1.0.9** — Toolbar button icon redesigned from the `Ch` text glyph to a theme-aware three-bar icon.
 
@@ -122,7 +124,7 @@ Toolbar button placement remains best-effort; if QuPath reorganizes its toolbar 
 
 ## Links
 
-- [User guide](docs/user-guide.md) — three ways to launch, image-switching behavior, the resize-with-text rationale, troubleshooting
+- [User guide](docs/user-guide.md) — launching, the legend's settings, the channel tools step by step, troubleshooting
 - [Developer guide](docs/developer-guide.md) — architecture, listener lifecycle, building from source
 - [GitHub Issues](https://github.com/uw-loci/qupath-extension-channel-names-viewer/issues) — bug reports and feature requests
 - [image.sc forum](https://forum.image.sc/) — discussion and support; tag `#qupath` and mention `@Mike_Nelson`
@@ -131,7 +133,7 @@ Toolbar button placement remains best-effort; if QuPath reorganizes its toolbar 
 
 ## License
 
-Apache License 2.0. Copyright 2026 Regents of the University of Wisconsin-Madison. See [LICENSE](LICENSE).
+Apache License 2.0. Copyright 2026 Regents of the University of Wisconsin-Madison. See [LICENSE](LICENSE). The channel color wheel is adapted from Sara McArdle's MIT-licensed Channel Color Chooser; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 **Author:** Mike Nelson — University of Wisconsin-Madison
-**Version:** 1.0.9
+**Version:** 1.1.0 (unreleased; current release 1.0.9)

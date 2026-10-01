@@ -132,8 +132,6 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
         MenuItem item = Tooltips.on(new MenuItem(resources.getString("menu.open")),
                 resources.getString("tooltip.menu"));
         item.setOnAction(e -> toggleLegend(qupath));
-        // Tooltip is exposed via the menu item user-data; QuPath's menu rendering
-        // does not show tooltips on MenuItem directly, but we attach for parity.
 
         extensionMenu.getItems().add(item);
         extensionMenu.getItems().add(new javafx.scene.control.SeparatorMenuItem());

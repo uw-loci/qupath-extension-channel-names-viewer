@@ -1,38 +1,38 @@
 # Channel Names Viewer — User Guide
 
-This guide walks through the legend window one task at a time. Sections are collapsible; expand the ones you need.
+This guide walks through the legend window, then the three channel tools (auto contrast, color wheel, grid viewer), one task at a time. Sections are collapsible; expand the ones you need.
 
 <details open>
 <summary><strong>Getting started</strong> (read this first)</summary>
 
-### Prerequisites
+## Prerequisites
 
 - A multiplex or fluorescence image is open in QuPath. The window mirrors the channel display, so it has nothing to show until an image with channels is loaded.
 - For brightfield / RGB images the window opens with an empty-state placeholder rather than a crash. You can leave it open while you switch to a fluorescence image — the legend will populate on the next image load.
 
-### First-run mental model
+## First-run mental model
 
-The window shows what QuPath's brightness/contrast dialog calls the *selected* channels — the ones currently contributing to the viewer. Toggle a channel in brightness/contrast and the legend updates immediately. The window itself is a chromeless rounded translucent panel; everything tunable (background opacity, font lock) lives in a right-click menu rather than a visible controls bar.
+The window shows what QuPath's brightness/contrast dialog calls the *selected* channels — the ones currently contributing to the viewer. Toggle a channel in brightness/contrast and the legend updates immediately. The window itself is a chromeless rounded translucent panel; everything tunable lives in a right-click menu rather than a visible controls bar.
 
-![Animated demo over a multiplex fluorescence image in QuPath: the color-coded channel-name legend updates live as channels are toggled in brightness/contrast.](images/channel-names-viewer-live-demo.gif)
+![Animated demo, recorded with v1.0.9, over a multiplex fluorescence image in QuPath: the color-coded channel-name legend updates live as channels are toggled in brightness/contrast.](images/channel-names-viewer-live-demo.gif)
 
-### Three ways to open the window
+## Three ways to open the window
 
 The launch surfaces, with their tooltip text:
 
-- **Toolbar button** (labeled `Ch`, with a small triangle in the bottom-right corner indicating that right-click reveals more): *Toggle the Channel Names viewer (Ctrl+Shift+C).* The button sits immediately to the right of QuPath's brightness/contrast button.
-- **Menu item** (`Extensions > Channel Names Viewer...`): *Toggle a small always-visible legend showing currently selected fluorescence channels.*
+- **Toolbar button** (three colored bars, with a small triangle in the bottom-right corner indicating that right-click reveals more): *Show or hide the channel-name legend (Ctrl/Cmd+Shift+C). Right-click for settings and channel tools.* The button sits immediately to the right of QuPath's brightness/contrast button.
+- **Menu item** (**Extensions > Channel Names Viewer > Channel Names Viewer...**): *Show or hide a small window listing the channels shown in the viewer.*
 - **Keyboard shortcut**: `Ctrl+Shift+C` on Linux and Windows, `Cmd+Shift+C` on macOS.
 
 All three surfaces toggle: clicking when the window is showing closes it. Pressing the shortcut a second time has the same effect.
 
-### Reading the legend
+## Reading the legend
 
-Each row in the window is one currently-selected channel. Channel names are drawn in their display colors when the color has enough contrast against the dark window background; otherwise the name is drawn in white. Channel order matches the order in the brightness/contrast dialog.
+Each row in the window is one selected channel, drawn in its display color. With **Preserve channel order** on (the default), rows follow the image's channel order; off, they follow the order the channels were switched on.
 
-The contrast check uses WCAG relative luminance (the standard accessibility formula), not perceived brightness. As a result, some bright but low-luminance colors fall into the white-fallback bucket — saturated blues are the common case, since blue contributes the least to perceived luminance even at full saturation. If you picked DAPI as pure blue in brightness/contrast, expect the legend to render that name in white rather than blue. This is intentional, not a bug; the alternative is unreadable blue-on-near-black text. Pick a slightly desaturated or lighter blue in brightness/contrast if you want the channel-color fidelity in the legend.
+Dark colors such as pure blue are hard to read on the dark background. Two options in the right-click menu help, and each applies only to channels darker than mid-gray: **Outline dark channels in white** draws a white halo around the name, and **Backdrop panel on dark channels** puts a light patch behind it.
 
-### Window controls — at a glance
+## Window controls — at a glance
 
 The window has no title bar, no buttons, no menu visible by default. It is intentionally minimal so it stays out of the way. Everything is gesture-based:
 
@@ -52,8 +52,8 @@ The window has no title bar, no buttons, no menu visible by default. It is inten
 
 The toolbar button, menu item, and keyboard shortcut all do the same thing: toggle the legend window — open it if it is closed, close it if it is open. Hovering each surface shows its tooltip:
 
-- **Toolbar button.** Labeled `Ch`. The small right-pointing triangle in the bottom-right corner is the same affordance QuPath uses on its line / polyline tool button: it indicates that right-clicking exposes additional options. Tooltip: *Toggle the Channel Names viewer (Ctrl+Shift+C).*
-- **Menu item.** **Extensions > Channel Names Viewer...** Tooltip: *Toggle a small always-visible legend showing currently selected fluorescence channels.*
+- **Toolbar button.** Three colored bars. The small triangle in the bottom-right corner is the same affordance QuPath uses on its line / polyline tool button: it indicates that right-clicking exposes additional options. Tooltip: *Show or hide the channel-name legend (Ctrl/Cmd+Shift+C). Right-click for settings and channel tools.*
+- **Menu item.** **Extensions > Channel Names Viewer > Channel Names Viewer...** Tooltip: *Show or hide a small window listing the channels shown in the viewer.*
 - **Keyboard shortcut.** `Ctrl+Shift+C` (`Cmd+Shift+C` on macOS). The shortcut is registered globally inside QuPath; it works whether the legend has focus or not.
 
 ### Closing
@@ -113,9 +113,9 @@ Within ~8 px of any edge or corner the cursor switches to the matching resize cu
 
 ### Position and size persistence
 
-Window x, y, width, and height are saved between sessions. By default — when **Lock font size** is unchecked — the saved size is *not* restored on open; instead, the window auto-fits to the current channel set (longest channel name × number of rows) at the QuPath *Location text font size* preference. Position is restored if it is still on a visible screen. See the **Settings** section for the lock-font-size opt-in.
+Window x, y, width, and height are saved between sessions. With **Lock font size** off (the default), the window opens centered on the QuPath window, sized to fit the current channels (longest channel name × number of rows) at QuPath's *Location text font size* preference. With it on, the saved position and size are restored. See the **Settings** section.
 
-If you move the window to a monitor that is later disconnected (an external display you only use at the office, for example), the saved position would be off-screen on the next launch. The extension guards against this by clamping any restored position to the bounds of currently-attached screens; if the saved position is unreachable, the window falls back to first-show defaults near the QuPath main window.
+If a locked window's saved position is on a monitor that is no longer attached (an external display you only use at the office, for example), it is ignored and the window opens with its default size and position instead.
 
 ### Multi-monitor
 
@@ -151,10 +151,14 @@ The font scales with window *height* divided by row count, not with width. Stret
 
 ### Two right-click surfaces
 
-The same three settings (background opacity, lock font size, reset opacity) live behind a context menu accessible in two places:
+The same menu opens in two places:
 
-- **Right-click the legend window body.** The right-click anywhere inside the window opens the menu.
-- **Right-click the toolbar button.** This works *without* opening the window — useful if you want to set background opacity or pre-lock the font size before the window is even visible. The small triangle in the bottom-right corner of the `Ch` button is the visual cue that more is hidden behind right-click.
+- **Right-click the legend window body.**
+- **Right-click the toolbar button.** This works *without* opening the window — useful if you want to set background opacity or pre-lock the font size before the window is even visible. The small triangle in the bottom-right corner of the button is the visual cue that more is hidden behind right-click.
+
+The menu has two sections. **Channel tools** opens the three [channel tools](#channel-tools). **Legend window** holds the legend's settings: **Background opacity**, **Preserve channel order**, **Outline dark channels in white**, **Backdrop panel on dark channels**, **Lock font size** and **Reset background opacity**.
+
+![The right-click menu: a Channel tools section above a Legend window section.](images/Docs_Legend_SettingsMenu.png)
 
 There is no equivalent on the menu item or the keyboard shortcut — they only toggle the window open/closed.
 
@@ -183,12 +187,157 @@ The following are persisted automatically when the window closes:
 - Position (x, y) and size (width, height)
 - Lock font size (boolean) and the locked font size value (pt)
 - Background opacity
+- Preserve channel order, and the two dark-channel options (saved as soon as you change them)
 
 Persistence happens automatically when the window closes. There is no "save state" command and no "reset to defaults" UI; if you want to reset, clear QuPath's preferences for this extension via the standard QuPath preferences workflow.
 
 ### What is *not* persisted
 
 The fact that the window was *open* on shutdown is not persisted. Each QuPath start has the window closed; you reopen it as needed. This avoids the "I closed QuPath, came back the next day, and an unwanted window popped up" surprise.
+
+</details>
+
+<a id="channel-tools"></a>
+
+<details>
+<summary><strong>Channel tools</strong>: auto contrast, color wheel, grid viewer</summary>
+
+Three tools for multichannel fluorescence images. Open each from **Extensions > Channel Names Viewer**, or from the **Channel tools** section of the legend's right-click menu. Each opens in its own window and stays open while you work.
+
+### Remove background haze: background-aware auto contrast
+
+QuPath's **Auto** sets each channel's display range from percentiles of all its pixels, so the display minimum sits *below* the background. Each channel then adds some color everywhere, and with many channels that adds up to a haze over the cells. This tool sets each channel's minimum just above its background instead.
+
+![The same area of an 18-channel Orion image showing the five channels whose background moved most. Left, QuPath Auto: an olive haze covers the tissue. Right, background-aware auto contrast: the background is black and cell membranes stand out.](images/Docs_AutoContrast_BeforeAfter.png)
+
+#### Steps
+
+1. **Open a fluorescence image and select the channels to adjust** in Brightness/Contrast.
+2. **Choose Extensions > Channel Names Viewer > Background-aware auto contrast...** The tool reads the image and applies the new ranges to the viewer right away. The table lists each channel, and the status line reads, for example, *5 channel(s) from 1,040,400 sampled pixels each.*
+3. **If haze remains, drag Minimum to the right.** The viewer updates as you drag.
+4. **To undo, click Revert.** The channels go back to the ranges they had before the tool changed them.
+
+![The auto contrast window: Apply to (visible or all channels), the Minimum slider at background + 3.0 x noise, Full brightness 0.5%, and a table with each channel's histogram, background, noise, minimum, maximum and a note.](images/Docs_AutoContrast_Window.png)
+
+#### Settings
+
+| Setting | Default | What it does |
+|---|---|---|
+| Apply to | Visible channels | Adjust only the channels shown in the viewer, or every channel. |
+| Minimum | 3 (range 0 to 8) | How many noise widths above the background peak the minimum sits. Raise it for less haze; lower it to see more of the background. |
+| Full brightness (%) | 0.5 (range 0 to 5) | Percent of the pixels *above the minimum* shown at full brightness. Raise it to brighten the channel. |
+
+The settings are remembered between sessions.
+
+**The table.** Values are in the image's own pixel units (gray levels).
+- **Background**: the pixel value at the center of the background peak.
+- **Noise**: the spread of the background, as a standard deviation. It is measured from the half width at half maximum of the peak's low side, which assumes Gaussian noise. If the background sits against the lowest value, as on background-subtracted data, the high side is used instead.
+- **Min**: background + (Minimum × noise). Values at or below it show as black.
+- **Max**: values at or above it show at full brightness.
+- **Note**: how much of the channel is above the minimum, or why percentiles were used.
+
+Hover over a histogram to see what its lines mean. The bars are pixel counts on a square-root scale; the dark gray line is the background peak, orange is the minimum, and blue the maximum.
+
+#### How it works, and its limits
+
+- **Sampling.** Pixels are read at full resolution from a 6 × 6 grid of 170-pixel tiles spread over the image, including its edges: about a million pixels per channel. A smaller image is read whole. Full resolution keeps the noise at the width you see when zoomed in. Only the current z-slice and timepoint are read; after moving to another, click **Resample**.
+- **3 × noise.** On a Gaussian background, a minimum 3 noise widths up hides about 99.9% of background pixels. Autofluorescence often has a longer bright tail, which leaves more of it visible; raise **Minimum** if so.
+- **Mostly-glass slides.** If tissue covers only a small part of the image, the background peak may be the glass rather than the tissue, and some tissue autofluorescence will remain. Small tissue pieces can also fall between the sampled tiles. Check each row's histogram.
+- **Padding.** Pixels at a channel's lowest value are ignored when there are more of them than of the next value, since this is usually unscanned or padded area.
+- **Display only.** Only display ranges change; pixel values, measurements and classifiers are not affected. The ranges are saved with the image's display settings when you save the image, and they affect rendered exports.
+- **Per image.** Ranges are set from each image's own pixels, so do not compare channel brightness between images by eye. For matched ranges, save a display preset in Brightness/Contrast and apply it to each image.
+- **Switching images.** After you open another image, the table fills in for the new image but nothing is applied until you click **Apply**. **Revert** works for the current image only.
+- **Reproducibility.** The results are deterministic: the same image, z-slice, timepoint and settings give the same ranges. The ranges are written to the QuPath log (**View > Show log**) when the window opens and when you click **Apply**.
+
+In one test on an 18-channel Orion crop, colored with 18 evenly spaced hues and default settings, the share of composite pixels whose red, green and blue were all above half brightness fell from 95% to 35%. QuPath Auto was approximated there as the 0.1st and 99.9th percentiles.
+
+### Recolor channels: channel color wheel
+
+Gives the visible channels evenly spaced colors around a color wheel: one spoke per channel, 360/N degrees apart. This is a port of Sara McArdle's [Channel Color Chooser](https://saramcardle.github.io/ColorWheelPicker/) (MIT License).
+
+#### Steps
+
+1. **Select the channels to recolor** in Brightness/Contrast.
+2. **Choose Extensions > Channel Names Viewer > Channel color wheel...** Opening the window recolors the visible channels from the wheel straight away.
+3. **Drag any spoke to rotate all the colors.** The viewer updates as you drag, and the colors are saved to the image when you release.
+4. **To undo, click Revert.** The channels get back the colors they had when the window opened.
+
+![The color wheel window: a CIELAB wheel with five spokes, the Wheel, Lightness and Spread controls, and the five channels with their new colors.](images/Docs_ColorWheel_Window.png)
+
+| Setting | Default | What it does |
+|---|---|---|
+| Wheel | HSV | **HSV**: pure hues. **CIELAB (equal lightness)**: hues of equal lightness L*, each as vivid as the screen allows, so no color is darker than another. |
+| Value (%) / Lightness (L*) | 100% / 65 | How bright all the colors are. |
+| Spread neighboring channels apart | Off | Gives channels that sit next to each other in the list colors far apart on the wheel, at least (N-1)/2 spokes apart. It has no effect with three or fewer channels. |
+
+Changing which channels are visible while the window is open recolors the visible channels again.
+
+**Copy script** copies a Groovy script that sets the same colors on other images. Colors are set by channel *position*, so use it only on images whose channels are in the same order. For the five channels above it reads:
+
+```groovy
+// Channel colors from the Channel Names Viewer color wheel (CIELAB, L* 70)
+// Colors are set by channel position; null leaves a channel unchanged
+// 1: 1_PCNA (C1)  #ff8b6e
+// 4: 5_CD45 (C4)  #00c0af
+// 8: 10_CD45RO (C8)  #ff74fc
+// 12: 14_CD3d (C12)  #9bb700
+// 13: 15_CD163 (C13)  #1db6ff
+setChannelColors(ColorTools.packRGB(255, 139, 110), null, null, ColorTools.packRGB(0, 192, 175), null, null, null, ColorTools.packRGB(255, 116, 252), null, null, null, ColorTools.packRGB(155, 183, 0), ColorTools.packRGB(29, 182, 255), null, null, null, null, null)
+
+import qupath.lib.common.ColorTools
+```
+
+### Compare channels side by side: channel grid viewer
+
+A grid of panels that follow the main viewer as you pan, like QuPath's **View > Show channel viewer**. Panels use the main viewer's display ranges and colors, so changes in Brightness/Contrast and the auto contrast tool show up immediately.
+
+#### Steps
+
+1. **Choose Extensions > Channel Names Viewer > Channel grid viewer...** The grid shows one panel per visible channel, plus the merged image.
+2. **Right-click a panel for its options.** The first item, **Use ... in main viewer**, shows that panel's channel (or preset) alone in the main viewer. The grid keeps its panels, so you can switch the main viewer between them.
+3. **To check whether a cell is positive for several markers**, choose **Sync to... > Cursor** and turn on **All channels in grayscale**, then hover over the cell in the main viewer. Every panel shows the same spot.
+
+![The grid viewer with all channels in grayscale: six marker panels and the merged image, separated by yellow lines.](images/Docs_ChannelGrid_Grayscale.png)
+
+#### The right-click menu, top to bottom
+
+| Item | What it does |
+|---|---|
+| Use ... in main viewer | Show this panel's channel, or preset, in the main viewer. |
+| Remove from grid | Take this panel out of the grid. The main viewer is not changed. Removed panels stay removed when you switch images. |
+| Restore removed panels (N) | Bring back every removed panel. |
+| *(channel name)* / Preset: ... | What this panel shows: its own channel, or any display preset that fits the image. |
+| Sync to... | What the panels center on: the cursor (hold **Shift** to stop following), the viewer center, the selected object, or nothing. |
+| Zoom... | Same as main viewer, or 400% to 1%. 100% is one image pixel per screen pixel. |
+| Panels... | **Visible channels** (follows the main viewer), **All channels**, or **One per display preset**. |
+| Show merged image, Show channel names, Show cursor, Show overlays | As in QuPath's channel viewer. |
+| All channels in grayscale | Show every channel panel in grayscale; often easier to read than dark colors. The lines between panels turn yellow so the grid stays visible. The main viewer keeps its colors. |
+| This channel in grayscale | The same for one panel, until you switch images. |
+
+![A channel panel's right-click menu: Use 3_SYTOX (C2) in main viewer, Remove from grid, the channel and three presets, Sync to, Zoom, Panels, the Show options, and the two grayscale options.](images/Docs_ChannelGrid_ContextMenu.png)
+
+**Display presets.** A preset is a set of display settings (which channels are shown, their colors and ranges) saved in the project. Showing presets side by side lets you compare groups of markers as you pan:
+
+1. **In Brightness/Contrast, show only the channels for one group** (for example CD3, CD4 and CD8), then click **Save** next to **Settings** and name it, for example *T cells*.
+2. **Repeat for each group**, for example *Tumor* with Pan-CK and Ki-67.
+3. **In the grid's right-click menu, choose Panels... > One per display preset.** Each preset gets a tile, next to the merged image.
+
+![The grid viewer with one tile per display preset: B cells and macrophages, T cells, Tumor, and the merged image.](images/Docs_ChannelGrid_Presets.png)
+
+A preset only appears if the current image has the same channels as the image it was saved from: the same number of channels with the same names. This is the same rule Brightness/Contrast uses for its **Settings** list. Presets saved, changed or deleted while the grid is open appear within about 2 seconds.
+
+### Troubleshooting the channel tools
+
+| What you see | Cause | Fix |
+|---|---|---|
+| *No narrow background peak (dense stain or empty channel) -- percentiles used* in the auto contrast table | The channel's histogram is a single broad peak with no narrow background below it. A dense stain covering the whole field (such as a nuclear stain on solid tissue) and a channel with no staining at all look the same. | For a dense stain, this is expected. For an unstained or negative-control channel, the 0.1st to 99.9th percentile range stretches its noise into haze: turn the channel off, or set its range by hand in Brightness/Contrast. **Full brightness** has no effect on these channels. |
+| *Almost nothing above min -- channel may be empty* | Fewer than 0.2% of the sampled pixels are above the minimum. | Expected for a channel with little or no staining in this image; it stays black. |
+| *This image is RGB; there are no channels to adjust.* | Brightfield or RGB image. | The tools work on fluorescence channels only. |
+| *Could not read pixels: ...* | The image could not be read. | Check that the image opens in QuPath, and look in **View > Show log**. |
+| The color wheel says *Select the channels to color in Brightness/Contrast.* | No channels are visible. | Select channels in Brightness/Contrast. |
+| *Display presets need an open project.* / *No display presets in this project -- save one in Brightness/Contrast.* | Presets are saved in a project. | Open a project and save a preset (see **Display presets** above). |
+| *No display preset in this project fits this image's channels.* | Every saved preset was made for an image with different channels. | Save a preset from an image with these channels. |
+| *All panels were removed from the grid.* | Every panel was removed. | Right-click the message and choose **Restore removed panels**. |
 
 </details>
 
@@ -207,7 +356,8 @@ The fact that the window was *open* on shutdown is not persisted. Each QuPath st
 - **Empty-state for RGB images.** The script does not guard against non-fluorescence images and renders an empty pane; the extension renders an explanatory message.
 - **Listener cleanup.** Closing the extension's window removes the channel-display listener; closing the script's window leaks one listener per show.
 - **Persistence.** Position, size, font lock state, locked font size, and background opacity all persist across QuPath restarts.
-- **Right-click settings.** Background opacity slider, lock font, reset opacity. The script has no in-window controls.
+- **Right-click settings.** Background opacity, channel order, dark-channel options, lock font, reset opacity. The script has no in-window controls.
+- **Channel tools.** Background-aware auto contrast, a channel color wheel and a channel grid viewer, from the same menu.
 
 The extension does not steal `Cmd/Ctrl+Shift+C` from the script — the script does not register a global accelerator at all — so the keymap stays clean even if both are installed.
 
@@ -220,9 +370,9 @@ The extension does not steal `Cmd/Ctrl+Shift+C` from the script — the script d
 
 **What you see.** The menu item and keyboard shortcut work, but no button appears next to brightness/contrast.
 
-**Cause.** The extension looks for QuPath's brightness/contrast button at install time and inserts itself immediately after. If QuPath reorganizes its toolbar in a future release, the lookup heuristic may fail. The extension logs a WARN entry when this happens; the QuPath log is at **Help > Show log**.
+**Cause.** The extension looks for QuPath's brightness/contrast button at install time and inserts itself immediately after. If QuPath reorganizes its toolbar in a future release, the lookup heuristic may fail. The extension logs a WARN entry when this happens; the QuPath log is at **View > Show log**.
 
-**Fix.** Use the menu item (**Extensions > Channel Names Viewer...**) or the keyboard shortcut (`Ctrl+Shift+C`). File an issue with the QuPath version and a copy of the log excerpt; the toolbar lookup heuristic can be updated for the new layout.
+**Fix.** Use the menu item (**Extensions > Channel Names Viewer > Channel Names Viewer...**) or the keyboard shortcut (`Ctrl+Shift+C`). File an issue with the QuPath version and a copy of the log excerpt; the toolbar lookup heuristic can be updated for the new layout.
 
 ### "Background is solid, slider does nothing"
 
@@ -238,7 +388,7 @@ The extension does not steal `Cmd/Ctrl+Shift+C` from the script — the script d
 
 **Cause.** The most common cause is that the window was opened before any image was loaded — the channel-display binding has nothing to attach to. A less common cause is a regression in the listener-rebinding logic.
 
-**Fix.** Close and reopen the window after the image is loaded. If the problem persists across multiple image switches, file an issue and include the QuPath log; a leaked listener emits a recognizable WARN line.
+**Fix.** Close and reopen the window after the image is loaded. If the problem persists across multiple image switches, file an issue and include the QuPath log.
 
 ### "Text is too small / too large"
 
@@ -258,15 +408,15 @@ Turn on **Lock font size** in the right-click menu. The current font becomes the
 
 **Cause.** The saved position references a screen the OS no longer reports as attached.
 
-**Fix.** This should auto-correct: the extension clamps restored positions to the bounds of currently-attached screens at startup, so the next launch will reposition the window. If for some reason the auto-correct does not work, close and reopen the window with the keyboard shortcut.
+**Fix.** This should auto-correct: a saved position that no longer touches any attached screen is ignored, and the window opens at its default position. If the window still does not appear, turn off **Lock font size** in the toolbar button's right-click menu; an unlocked window always opens centered on the QuPath window.
 
-### "Why is my channel showing as white?"
+### "Why is my blue channel hard to read?"
 
-**What you see.** The legend draws a channel name in white even though you picked a non-white display color (a saturated blue or a dark red, for example) in brightness/contrast.
+**What you see.** A channel name in a dark color (pure blue, dark red, dark purple) is hard to read on the dark legend background.
 
-**Cause.** The legend background is near-black, and channel-color text is only drawn in the channel's actual color when that color clears the WCAG AA contrast ratio (4.5:1) against the background. Pure-blue channels in particular have very low WCAG luminance (blue's coefficient is `0.0722`, far smaller than green's `0.7152`), so even fully-saturated `rgb(0, 0, 255)` reads as `2.26:1` contrast — well below 4.5:1 — and the legend falls back to white text. Dark reds, dark purples, and other low-luminance hues fall into the same bucket.
+**Cause.** Names are drawn in their channel's display color, and a dark color has little contrast against the near-black background.
 
-**Fix.** This is intentional. White text is more readable on the dark background than a low-luminance hue. If you want the legend to keep the channel-color fidelity, pick a slightly desaturated or lighter color for that channel in **Image > Brightness/Contrast** — for example a sky-blue rather than a pure blue. The legend will pick up the change immediately. See **Reading the legend** in the *Getting started* section for the full explanation.
+**Fix.** Right-click the legend and turn on **Outline dark channels in white** or **Backdrop panel on dark channels**. Either applies only to channels darker than mid-gray. Or pick a lighter color for that channel in Brightness/Contrast.
 
 ### "Empty window shows when I open a new image"
 
