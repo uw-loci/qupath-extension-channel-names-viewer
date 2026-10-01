@@ -128,6 +128,8 @@ public class ChannelGridWindow implements QuPathViewerListener {
 
     /** Preset shown in a panel instead of its own channel, by the panel's key. */
     private final Map<String, String> panelPresets = new HashMap<>();
+    /** Panels removed from the grid, by key; kept across images until restored. */
+    private final Set<String> removed = new java.util.LinkedHashSet<>();
     /** True while this window changes the main viewer's channels. */
     private boolean changingMain;
     /**
@@ -311,18 +313,12 @@ public class ChannelGridWindow implements QuPathViewerListener {
             for (String name : presetNames()) {
                 panels.add(new Panel(null, name));
             }
+            panels.removeIf(p -> removed.contains(p.key()));
             if (panels.isEmpty()) {
-                var none = new javafx.scene.control.Label(qupath.getProject() == null
-                        ? "Display presets need an open project.\nRight-click to show channels instead."
-                        : "No display presets in this project -- save one in Brightness/Contrast.\n"
-                        + "Right-click to show channels instead.");
-                none.setTextFill(Color.WHITE);
-                none.setWrapText(true);
-                none.setOnContextMenuRequested(e -> {
-                    buildMenu(new Panel(null, null)).show(none, e.getScreenX(), e.getScreenY());
-                    e.consume();
-                });
-                grid.add(none, 0, 0);
+                showEmptyMessage(qupath.getProject() == null ? "Display presets need an open project."
+                        : !removed.isEmpty() && !presetNames().isEmpty() ? "All presets were removed from the grid."
+                        : allPresetNames().isEmpty() ? "No display presets in this project -- save one in Brightness/Contrast."
+                        : "No display preset in this project fits this image's channels.");
                 return;
             }
         }
@@ -345,8 +341,14 @@ public class ChannelGridWindow implements QuPathViewerListener {
         for (var c : channels) {
             panels.add(new Panel(c, null));
         }
+        panels.removeIf(p -> removed.contains(p.key()));
         if (ChannelToolsPreferences.GRID_MERGED.get() || panels.isEmpty()) {
             panels.add(new Panel(null, null));
+        }
+        panels.removeIf(p -> removed.contains(p.key()));
+        if (panels.isEmpty()) {
+            showEmptyMessage("All panels were removed from the grid.");
+            return;
         }
         int n = panels.size();
         int cols = (int) Math.ceil(Math.sqrt(n));
@@ -371,6 +373,19 @@ public class ChannelGridWindow implements QuPathViewerListener {
             grid.add(cell, i % cols, i / cols);
         }
         requestUpdate();
+    }
+
+    /** A message in place of the grid, whose right-click menu can restore panels or change mode. */
+    private void showEmptyMessage(String text) {
+        var label = new javafx.scene.control.Label(text + "\nRight-click for options.");
+        label.setTextFill(Color.WHITE);
+        label.setWrapText(true);
+        label.setPadding(new javafx.geometry.Insets(12));
+        label.setOnContextMenuRequested(e -> {
+            buildMenu(new Panel(null, null)).show(label, e.getScreenX(), e.getScreenY());
+            e.consume();
+        });
+        grid.add(label, 0, 0);
     }
 
     private void requestUpdate() {
@@ -428,7 +443,9 @@ public class ChannelGridWindow implements QuPathViewerListener {
             this.channel = channel;
             this.tilePreset = tilePreset;
             this.renderer = new Renderer(this);
-            String presetName = tilePreset != null ? tilePreset : panelPresets.get(key());
+            // In one-per-preset mode the tiles are the presets; the merged panel stays merged
+            String presetName = tilePreset != null ? tilePreset
+                    : panelsMode() == Panels.PRESETS ? null : panelPresets.get(key());
             if (presetName != null) {
                 preset = loadPreset(presetName);
             }
@@ -451,6 +468,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
                 preset = null;
             } else {
                 panelPresets.put(key(), name);
+                // Null if the preset does not fit this image; the choice is kept for images it fits
                 preset = loadPreset(name);
             }
             localChanges.incrementAndGet();
@@ -526,8 +544,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
         }
 
         private void drawName(GraphicsContext gc, int w, int h) {
-            String name = preset != null ? preset.name() + (preset.channels().isEmpty() ? " (no matching channels)" : "")
-                    : channel == null ? "Merged" : channel.getName();
+            String name = preset != null ? preset.name() : channel == null ? "Merged" : channel.getName();
             Color color = Color.WHITE;
             if (preset == null && channel != null && !isGrayscale(channel) && channel.getColor() != null) {
                 int rgb = channel.getColor();
@@ -591,8 +608,21 @@ public class ChannelGridWindow implements QuPathViewerListener {
     private record PresetView(String name, List<ChannelDisplayInfo> channels, boolean inverted) {
     }
 
-    /** Names of the display presets saved in the project (Brightness/Contrast settings). */
+    /**
+     * Names of the saved display presets that fit the current image: QuPath's own test,
+     * the same channels by number and name. A preset with any other channel is left out.
+     */
     private List<String> presetNames() {
+        if (display == null) {
+            return List.of();
+        }
+        return allPresetNames().stream()
+                .filter(name -> DisplaySettingUtils.settingsCompatibleWithDisplay(display, readPreset(name)))
+                .toList();
+    }
+
+    /** Names of every display preset saved in the project (Brightness/Contrast settings). */
+    private List<String> allPresetNames() {
         var project = qupath.getProject();
         if (project == null) {
             return List.of();
@@ -621,12 +651,15 @@ public class ChannelGridWindow implements QuPathViewerListener {
     /**
      * The preset's showing channels as channel objects of their own, so drawing them never
      * changes the main viewer's display.
+     *
+     * @return null if the preset is missing or does not fit the current image
      */
     private PresetView loadPreset(String name) {
         var settings = readPreset(name);
         var imageData = viewer == null ? null : viewer.getImageData();
-        if (settings == null || imageData == null) {
-            return new PresetView(name, List.of(), false);
+        if (settings == null || imageData == null
+                || !DisplaySettingUtils.settingsCompatibleWithDisplay(display, settings)) {
+            return null;
         }
         List<ChannelDisplayInfo> channels = new ArrayList<>();
         for (int i = 0; i < imageData.getServer().nChannels(); i++) {
@@ -749,11 +782,28 @@ public class ChannelGridWindow implements QuPathViewerListener {
         String shown = panel.preset != null ? "preset " + panel.preset.name()
                 : panel.channel != null ? panel.channel.getName() : null;
         var use = new MenuItem(shown == null ? "Use in main viewer" : "Use " + shown + " in main viewer");
-        use.setDisable(shown == null || (panel.preset != null && panel.preset.channels().isEmpty()));
+        use.setDisable(shown == null);
         use.setOnAction(e -> useInMainViewer(panel));
-        menu.getItems().addAll(use, new SeparatorMenuItem());
+        menu.getItems().add(use);
+        if (panels.contains(panel)) {
+            var remove = new MenuItem("Remove from grid");
+            remove.setOnAction(e -> {
+                removed.add(panel.key());
+                rebuildPanels();
+            });
+            menu.getItems().add(remove);
+        }
+        if (!removed.isEmpty()) {
+            var restore = new MenuItem("Restore removed panels (" + removed.size() + ")");
+            restore.setOnAction(e -> {
+                removed.clear();
+                rebuildPanels();
+            });
+            menu.getItems().add(restore);
+        }
+        menu.getItems().add(new SeparatorMenuItem());
 
-        if (panel.tilePreset == null) {
+        if (panel.tilePreset == null && panelsMode() != Panels.PRESETS) {
             addShowChoices(menu, panel);
         }
 
@@ -831,7 +881,8 @@ public class ChannelGridWindow implements QuPathViewerListener {
         var names = presetNames();
         if (names.isEmpty()) {
             var none = new MenuItem(qupath.getProject() == null ? "Display presets need an open project"
-                    : "No display presets -- save one in Brightness/Contrast");
+                    : allPresetNames().isEmpty() ? "No display presets -- save one in Brightness/Contrast"
+                    : "No display preset fits this image's channels");
             none.setDisable(true);
             menu.getItems().add(none);
         }
