@@ -6,9 +6,12 @@ import java.awt.Shape;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import javafx.application.Platform;
@@ -25,6 +28,7 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.CheckMenuItem;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Menu;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.RadioMenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.ToggleGroup;
@@ -47,7 +51,10 @@ import qupath.ext.channelnamesviewer.preferences.ChannelToolsPreferences;
 import qupath.lib.awt.common.AwtTools;
 import qupath.lib.display.ChannelDisplayInfo;
 import qupath.lib.display.ChannelDisplayMode;
+import qupath.lib.display.DirectServerChannelInfo;
 import qupath.lib.display.ImageDisplay;
+import qupath.lib.display.settings.DisplaySettingUtils;
+import qupath.lib.display.settings.ImageDisplaySettings;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.images.stores.AbstractImageRenderer;
 import qupath.lib.gui.prefs.PathPrefs;
@@ -96,10 +103,27 @@ public class ChannelGridWindow implements QuPathViewerListener {
 
     /** Channels shown in grayscale individually, by name, for the current image. */
     private final Set<String> grayChannels = new HashSet<>();
-    /** Counts grayscale changes, so rendered tiles cached before one are not reused. */
-    private final AtomicLong grayscaleChanges = new AtomicLong();
+    /** Counts grayscale and preset changes, so rendered tiles cached before one are not reused. */
+    private final AtomicLong localChanges = new AtomicLong();
 
-    private final ListChangeListener<ChannelDisplayInfo> channelListener = c -> Platform.runLater(this::rebuildPanels);
+    /** Preset shown in a panel instead of its own channel, by the panel's key. */
+    private final Map<String, String> panelPresets = new HashMap<>();
+    /** True while this window changes the main viewer's channels. */
+    private boolean changingMain;
+    /**
+     * Channels the grid keeps after this window changed the main viewer's selection, so
+     * "Use in main viewer" does not collapse the grid to one panel; null to follow the
+     * main viewer.
+     */
+    private List<String> keptChannels;
+
+    private final ListChangeListener<ChannelDisplayInfo> channelListener = c -> {
+        if (changingMain) {
+            return;
+        }
+        keptChannels = null;
+        Platform.runLater(this::rebuildPanels);
+    };
     private final ChangeListener<Number> displayListener = (o, a, b) -> requestUpdate();
     private final ChangeListener<QuPathViewer> viewerListener = (o, a, b) -> bindViewer(b);
     private final InvalidationListener prefListener = o -> requestUpdate();
@@ -142,7 +166,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
 
     private final InvalidationListener prefRebuild = o -> rebuildPanels();
     private final InvalidationListener grayscaleListener = o -> {
-        grayscaleChanges.incrementAndGet();
+        localChanges.incrementAndGet();
         requestUpdate();
     };
 
@@ -193,6 +217,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
     public void imageDataChanged(QuPathViewer viewer, ImageData<BufferedImage> imageDataOld,
                                  ImageData<BufferedImage> imageDataNew) {
         grayChannels.clear();
+        keptChannels = null;
         Platform.runLater(this::rebuildPanels);
     }
 
@@ -253,8 +278,15 @@ public class ChannelGridWindow implements QuPathViewerListener {
         if (display == null || viewer == null || viewer.getImageData() == null) {
             return;
         }
-        List<ChannelDisplayInfo> channels = new ArrayList<>(ChannelToolsPreferences.GRID_ALL_CHANNELS.get()
-                ? display.availableChannels() : display.selectedChannels());
+        List<ChannelDisplayInfo> channels;
+        if (ChannelToolsPreferences.GRID_ALL_CHANNELS.get()) {
+            channels = new ArrayList<>(display.availableChannels());
+        } else if (keptChannels != null) {
+            channels = new ArrayList<>(display.availableChannels().stream()
+                    .filter(c -> keptChannels.contains(c.getName())).toList());
+        } else {
+            channels = new ArrayList<>(display.selectedChannels());
+        }
         if (!ChannelToolsPreferences.GRID_ALL_CHANNELS.get()) {
             // Keep the image's channel order, not the order they were switched on
             channels.sort((a, b) -> Integer.compare(display.availableChannels().indexOf(a),
@@ -337,16 +369,39 @@ public class ChannelGridWindow implements QuPathViewerListener {
         private final Renderer renderer;
         private BufferedImage img;
         private WritableImage imgFX;
+        /** The preset shown instead of the channel; null to show the channel. */
+        private PresetView preset;
 
         Panel(ChannelDisplayInfo channel) {
             this.channel = channel;
-            this.renderer = new Renderer(channel);
+            this.renderer = new Renderer(this);
+            String presetName = panelPresets.get(key());
+            if (presetName != null) {
+                preset = loadPreset(presetName);
+            }
             widthProperty().addListener((o, a, b) -> requestUpdate());
             heightProperty().addListener((o, a, b) -> requestUpdate());
             setOnContextMenuRequested(e -> {
                 buildMenu(this).show(this, e.getScreenX(), e.getScreenY());
                 e.consume();
             });
+        }
+
+        /** Identifies the panel across rebuilds: its channel's name, or the merged panel. */
+        String key() {
+            return channel == null ? "<merged>" : channel.getName();
+        }
+
+        void showPreset(String name) {
+            if (name == null) {
+                panelPresets.remove(key());
+                preset = null;
+            } else {
+                panelPresets.put(key(), name);
+                preset = loadPreset(name);
+            }
+            localChanges.incrementAndGet();
+            requestUpdate();
         }
 
         void repaint() {
@@ -418,9 +473,10 @@ public class ChannelGridWindow implements QuPathViewerListener {
         }
 
         private void drawName(GraphicsContext gc, int w, int h) {
-            String name = channel == null ? "Merged" : channel.getName();
+            String name = preset != null ? preset.name() + (preset.channels().isEmpty() ? " (no matching channels)" : "")
+                    : channel == null ? "Merged" : channel.getName();
             Color color = Color.WHITE;
-            if (channel != null && !isGrayscale(channel) && channel.getColor() != null) {
+            if (preset == null && channel != null && !isGrayscale(channel) && channel.getColor() != null) {
                 int rgb = channel.getColor();
                 color = Color.rgb((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
             }
@@ -436,20 +492,20 @@ public class ChannelGridWindow implements QuPathViewerListener {
         }
     }
 
-    /** Renders one channel, in grayscale if asked, from the main viewer's display. */
+    /** Renders a panel: its preset, or its channel (in grayscale if asked) from the main viewer's display. */
     private class Renderer extends AbstractImageRenderer {
 
-        private final ChannelDisplayInfo channel;
+        private final Panel panel;
 
-        Renderer(ChannelDisplayInfo channel) {
-            this.channel = channel;
+        Renderer(Panel panel) {
+            this.panel = panel;
         }
 
         @Override
         public long getLastChangeTimestamp() {
             // Both counts only increase, so the sum changes whenever either does
             long main = display == null ? 0 : display.getLastChangeTimestamp();
-            return main + grayscaleChanges.get();
+            return main + localChanges.get();
         }
 
         @Override
@@ -457,6 +513,12 @@ public class ChannelGridWindow implements QuPathViewerListener {
             if (display == null) {
                 return imgInput;
             }
+            var preset = panel.preset;
+            if (preset != null) {
+                return ImageDisplay.applyTransforms(imgInput, imgOutput, preset.channels(),
+                        preset.inverted() ? ChannelDisplayMode.INVERTED_COLOR : ChannelDisplayMode.COLOR);
+            }
+            var channel = panel.channel;
             if (channel == null) {
                 return display.applyTransforms(imgInput, imgOutput);
             }
@@ -469,11 +531,136 @@ public class ChannelGridWindow implements QuPathViewerListener {
     }
 
     // ------------------------------------------------------------------
+    // Presets and the main viewer
+    // ------------------------------------------------------------------
+
+    /** A display preset's showing channels, with its colours and ranges, for one image. */
+    private record PresetView(String name, List<ChannelDisplayInfo> channels, boolean inverted) {
+    }
+
+    /** Names of the display presets saved in the project (Brightness/Contrast settings). */
+    private List<String> presetNames() {
+        var project = qupath.getProject();
+        if (project == null) {
+            return List.of();
+        }
+        try {
+            return DisplaySettingUtils.getResourcesForProject(project).getNames().stream().sorted().toList();
+        } catch (IOException e) {
+            logger.warn("Could not list display presets: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    private ImageDisplaySettings readPreset(String name) {
+        var project = qupath.getProject();
+        if (project == null) {
+            return null;
+        }
+        try {
+            return DisplaySettingUtils.getResourcesForProject(project).get(name);
+        } catch (IOException e) {
+            logger.warn("Could not read display preset {}: {}", name, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * The preset's showing channels as channel objects of their own, so drawing them never
+     * changes the main viewer's display.
+     */
+    private PresetView loadPreset(String name) {
+        var settings = readPreset(name);
+        var imageData = viewer == null ? null : viewer.getImageData();
+        if (settings == null || imageData == null) {
+            return new PresetView(name, List.of(), false);
+        }
+        List<ChannelDisplayInfo> channels = new ArrayList<>();
+        for (int i = 0; i < imageData.getServer().nChannels(); i++) {
+            var info = new DirectServerChannelInfo(imageData, i);
+            var cs = settings.getChannels().stream()
+                    .filter(c -> c.getName().equals(info.getName()) && c.isShowing())
+                    .findFirst().orElse(null);
+            if (cs == null) {
+                continue;
+            }
+            if (cs.getColor() != null) {
+                info.setLUTColor(cs.getColor().getRed(), cs.getColor().getGreen(), cs.getColor().getBlue());
+            }
+            info.setMinDisplay(cs.getMinDisplay());
+            info.setMaxDisplay(cs.getMaxDisplay());
+            channels.add(info);
+        }
+        return new PresetView(name, channels, settings.invertBackground());
+    }
+
+    /** Change the main viewer's channels, keeping the grid's panels as they are. */
+    private void changeMain(Runnable change) {
+        if (display == null) {
+            return;
+        }
+        keptChannels = panels.stream().filter(p -> p.channel != null).map(Panel::key).toList();
+        changingMain = true;
+        try {
+            change.run();
+        } finally {
+            changingMain = false;
+        }
+        requestUpdate();
+    }
+
+    private void useInMainViewer(Panel panel) {
+        if (panel.preset != null) {
+            var settings = readPreset(panel.preset.name());
+            changeMain(() -> {
+                if (!DisplaySettingUtils.applySettingsToDisplay(display, settings)) {
+                    logger.warn("Display preset {} does not match this image's channels", panel.preset.name());
+                }
+            });
+        } else if (panel.channel != null) {
+            changeMain(() -> {
+                for (var c : display.availableChannels()) {
+                    display.setChannelSelected(c, c == panel.channel);
+                }
+            });
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Context menu
     // ------------------------------------------------------------------
 
     private ContextMenu buildMenu(Panel panel) {
         var menu = new ContextMenu();
+
+        String shown = panel.preset != null ? "preset " + panel.preset.name()
+                : panel.channel != null ? panel.channel.getName() : null;
+        var use = new MenuItem(shown == null ? "Use in main viewer" : "Use " + shown + " in main viewer");
+        use.setDisable(shown == null || (panel.preset != null && panel.preset.channels().isEmpty()));
+        use.setOnAction(e -> useInMainViewer(panel));
+        menu.getItems().addAll(use, new SeparatorMenuItem());
+
+        var showGroup = new ToggleGroup();
+        var own = new RadioMenuItem(panel.channel == null ? "Merged image" : panel.channel.getName());
+        own.setToggleGroup(showGroup);
+        own.setSelected(panel.preset == null);
+        own.setOnAction(e -> panel.showPreset(null));
+        menu.getItems().add(own);
+        var names = presetNames();
+        if (names.isEmpty()) {
+            var none = new MenuItem(qupath.getProject() == null ? "Display presets need an open project"
+                    : "No display presets -- save one in Brightness/Contrast");
+            none.setDisable(true);
+            menu.getItems().add(none);
+        }
+        for (String name : names) {
+            var item = new RadioMenuItem("Preset: " + name);
+            item.setToggleGroup(showGroup);
+            item.setSelected(panel.preset != null && name.equals(panel.preset.name()));
+            item.setOnAction(e -> panel.showPreset(name));
+            menu.getItems().add(item);
+        }
+        menu.getItems().add(new SeparatorMenuItem());
 
         var syncMenu = new Menu("Sync to...");
         var syncGroup = new ToggleGroup();
@@ -505,7 +692,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
                 new SeparatorMenuItem(),
                 check("All channels in grayscale", ChannelToolsPreferences.GRID_GRAYSCALE));
 
-        if (panel.channel != null) {
+        if (panel.channel != null && panel.preset == null) {
             var one = new CheckMenuItem("This channel in grayscale (" + panel.channel.getName() + ")");
             one.setSelected(isGrayscale(panel.channel));
             one.setDisable(ChannelToolsPreferences.GRID_GRAYSCALE.get());
@@ -515,7 +702,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
                 } else {
                     grayChannels.remove(panel.channel.getName());
                 }
-                grayscaleChanges.incrementAndGet();
+                localChanges.incrementAndGet();
                 requestUpdate();
             });
             menu.getItems().add(one);
