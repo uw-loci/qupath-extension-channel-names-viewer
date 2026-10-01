@@ -138,7 +138,7 @@ public class ChannelLegendStage {
 
     /** Window body tooltip. */
     private static final String BODY_TOOLTIP =
-            "Drag to move. Drag edges to resize. Double-click to close. Right-click for settings.";
+            "Drag to move, drag an edge to resize, double-click to close. Right-click for settings and channel tools.";
 
     // ---- Empty-state subtitles ----
     private static final String EMPTY_HEADLINE = "No fluorescence channels";
@@ -226,7 +226,7 @@ public class ChannelLegendStage {
         this.root = new StackPane();
         this.root.getChildren().add(this.content);
         StackPane.setAlignment(this.content, Pos.TOP_LEFT);
-        Tooltip.install(this.root, new Tooltip(BODY_TOOLTIP));
+        Tooltip.install(this.root, Tooltips.of(BODY_TOOLTIP));
 
         applyBackgroundCss();
         // Re-apply CSS whenever opacity changes so the user sees the slider live.
@@ -790,7 +790,7 @@ public class ChannelLegendStage {
         // so dark channels stay readable without changing the channel hue.
         // Mutually exclusive with the panel-backdrop option below.
         CheckMenuItem outlineItem = Tooltips.on(new CheckMenuItem("Outline dark channels in white"),
-                "Draw a white halo around names in dark colours (such as blue) so they stay readable.");
+                "Draw a white halo around names in dark colors (such as blue) so they stay readable.");
         outlineItem.setSelected(ChannelNamesViewerPreferences.getWhiteTextOutline());
         outlineItem.selectedProperty().addListener((obs, oldVal, newVal) -> {
             ChannelNamesViewerPreferences.setWhiteTextOutline(newVal);
@@ -809,7 +809,7 @@ public class ChannelLegendStage {
         // Light channels render bare regardless. Mutually exclusive with the
         // white-outline option above.
         CheckMenuItem panelItem = Tooltips.on(new CheckMenuItem("Backdrop panel on dark channels"),
-                "Put a light patch behind names in dark colours. An alternative to the white outline.");
+                "Put a light patch behind names in dark colors, as an alternative to the white outline.");
         panelItem.setSelected(ChannelNamesViewerPreferences.getDarkLabelPanel());
         panelItem.selectedProperty().addListener((obs, oldVal, newVal) -> {
             ChannelNamesViewerPreferences.setDarkLabelPanel(newVal);

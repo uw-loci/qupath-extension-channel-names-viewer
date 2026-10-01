@@ -48,11 +48,15 @@ class WheelColorsTest {
                 assertEquals(i, sorted[i], "n=" + n);
             }
         }
-        int[] eight = WheelColors.spokeOrder(8, true);
-        // Neighbours at least 2 spokes apart
-        for (int i = 1; i < 8; i++) {
-            int d = Math.abs(eight[i] - eight[i - 1]);
-            assertTrue(Math.min(d, 8 - d) >= 2, Arrays.toString(eight));
+        // Neighbours in the list are at least (n-1)/2 spokes apart (the most possible)
+        for (int n = 5; n <= 20; n++) {
+            int[] order = WheelColors.spokeOrder(n, true);
+            for (int i = 1; i < n; i++) {
+                int d = Math.abs(order[i] - order[i - 1]);
+                assertTrue(Math.min(d, n - d) >= (n - 1) / 2, "n=" + n + " " + Arrays.toString(order));
+            }
         }
+        assertArrayEquals(new int[] {0, 2, 1, 3}, WheelColors.spokeOrder(4, true));
+        assertArrayEquals(new int[] {0, 3, 1, 4, 2, 5}, WheelColors.spokeOrder(6, true));
     }
 }

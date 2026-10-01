@@ -129,11 +129,12 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
 
     private MenuItem registerMenuItem(QuPathGUI qupath) {
         var extensionMenu = qupath.getMenu("Extensions>" + EXTENSION_NAME, true);
-        MenuItem item = new MenuItem(resources.getString("menu.open"));
+        MenuItem item = Tooltips.on(new MenuItem(resources.getString("menu.open")),
+                resources.getString("tooltip.menu"));
         item.setOnAction(e -> toggleLegend(qupath));
         // Tooltip is exposed via the menu item user-data; QuPath's menu rendering
         // does not show tooltips on MenuItem directly, but we attach for parity.
-        item.getProperties().put("tooltip", resources.getString("tooltip.menu"));
+
         extensionMenu.getItems().add(item);
         extensionMenu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
         extensionMenu.getItems().addAll(toolItems(qupath));
@@ -395,7 +396,7 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
         // Vector graphic -- no font and no image asset, so it stays crisp at any
         // display scale. The button's tooltip carries the action language.
         Button button = new Button();
-        button.setTooltip(new Tooltip(resources.getString("tooltip.toolbar")));
+        button.setTooltip(Tooltips.of(resources.getString("tooltip.toolbar")));
         button.setAccessibleText(resources.getString("tooltip.toolbar"));
         button.setOnAction(e -> toggleLegend(qupath));
         // Match QuPath's existing toolbar button sizing.

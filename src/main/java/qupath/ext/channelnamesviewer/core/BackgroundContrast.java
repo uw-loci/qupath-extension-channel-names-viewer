@@ -21,8 +21,18 @@ public final class BackgroundContrast {
     static final int PEAK_BINS = 2048;
     /** Moving-average width (bins) applied before finding the peak. */
     static final int SMOOTH = 5;
-    /** Below this fraction of pixels above the minimum, no background peak was found. */
+    /**
+     * Below this fraction of pixels above the minimum, a channel with a narrow background
+     * peak is treated as empty: the minimum stays above the background (so it shows black)
+     * instead of falling back to percentiles, which would stretch its noise into haze.
+     * A channel that is a single broad peak cannot be told from a dense stain and still
+     * falls back.
+     */
     static final double MIN_FOREGROUND_FRACTION = 0.002;
+    /** The peak is re-measured on finer bins over this many coarse noise widths either side. */
+    static final double REFINE_WINDOW = 8;
+    /** Most bins of the re-measured peak. */
+    static final int REFINE_BINS = 512;
     /**
      * Largest background noise, as a fraction of the distance from the peak to the bright
      * end (99.9th percentile). Sparse markers measured 0.01-0.06; a dense nuclear stain 0.43.
@@ -41,9 +51,10 @@ public final class BackgroundContrast {
      * @param noise           background noise (standard deviation) from the peak's width; NaN if none
      * @param foreground      fraction of pixels above {@code min}
      * @param backgroundPeak  false if percentiles were used because there is no narrow background peak
+     * @param empty           true if almost nothing is above the minimum: the channel may be unstained
      */
     public record Result(double min, double max, double background, double noise,
-                         double foreground, boolean backgroundPeak) {
+                         double foreground, boolean backgroundPeak, boolean empty) {
     }
 
     /**
@@ -55,7 +66,7 @@ public final class BackgroundContrast {
     public static Result compute(float[] values, double noiseMultiple, double saturated,
                                  double fallbackSaturated) {
         if (values == null || values.length == 0) {
-            return new Result(0, 1, Double.NaN, Double.NaN, 0, false);
+            return new Result(0, 1, Double.NaN, Double.NaN, 0, false, false);
         }
         double lo = Double.POSITIVE_INFINITY;
         double hi = Double.NEGATIVE_INFINITY;
@@ -67,7 +78,7 @@ public final class BackgroundContrast {
         }
         if (!(hi > lo)) {
             double v = Double.isFinite(lo) ? lo : 0;
-            return new Result(v, v + 1, v, 0, 0, false);
+            return new Result(v, v + 1, v, 0, 0, false, false);
         }
         Hist full = new Hist(values, lo, hi, FULL_BINS);
         // Unscanned / padded regions show as a spike in the first bin; QuPath skips it too
@@ -76,7 +87,7 @@ public final class BackgroundContrast {
             full.counts[0] = 0;
         }
         if (full.total <= 0) {
-            return new Result(lo, hi, Double.NaN, Double.NaN, 0, false);
+            return new Result(lo, hi, Double.NaN, Double.NaN, 0, false, false);
         }
         double p999 = full.quantile(0.999);
         Result peak = fromPeak(full, lo, p999, noiseMultiple, saturated);
@@ -88,7 +99,7 @@ public final class BackgroundContrast {
         if (!(fMax > fMin)) {
             fMax = fMin + full.binWidth;
         }
-        return new Result(fMin, fMax, Double.NaN, Double.NaN, full.fractionAbove(fMin), false);
+        return new Result(fMin, fMax, Double.NaN, Double.NaN, full.fractionAbove(fMin), false, false);
     }
 
     /** The background-peak range, or null if the tallest peak is not a narrow background peak. */
@@ -97,18 +108,63 @@ public final class BackgroundContrast {
         if (!(p999 > lo)) {
             return null;
         }
-        double width = (p999 - lo) / PEAK_BINS;
-        double[] counts = new double[PEAK_BINS];
+        double[] coarse = measurePeak(full, lo, p999, PEAK_BINS);
+        if (coarse == null) {
+            return null;
+        }
+        // Coarse bins span the whole range, so a narrow peak beside bright signal covers only
+        // a bin or two; measure it again on bins sized to the peak
+        double from = Math.max(lo, coarse[0] - REFINE_WINDOW * coarse[1]);
+        double to = Math.min(p999, coarse[0] + REFINE_WINDOW * coarse[1]);
+        int bins = (int) Math.max(16, Math.min(REFINE_BINS, Math.floor((to - from) / full.binWidth)));
+        double[] fine = to > from ? measurePeak(full, from, to, bins) : null;
+        double background = fine != null ? fine[0] : coarse[0];
+        double noise = fine != null ? fine[1] : coarse[1];
+        if (noise > MAX_PEAK_WIDTH_FRACTION * (p999 - background)) {
+            return null;
+        }
+        double min = background + noiseMultiple * noise;
+        double foreground = full.fractionAbove(min);
+        if (foreground < MIN_FOREGROUND_FRACTION) {
+            // Almost nothing above the background: keep it black rather than stretching noise
+            double max = Math.max(full.quantile(0.9999), min + Math.max(noise, full.binWidth));
+            return new Result(min, max, background, noise, foreground, true, true);
+        }
+        double max = full.quantile(1 - saturated * foreground);
+        if (!(max > min)) {
+            return null;
+        }
+        return new Result(min, max, background, noise, foreground, true, false);
+    }
+
+    /**
+     * Find the tallest peak of the histogram between {@code from} and {@code to}.
+     *
+     * @return {background, noise}: the peak's centroid and its standard deviation from the
+     *         half width at half maximum of its rising side (falling side if the peak sits
+     *         against {@code from}); null if there are no counts
+     */
+    private static double[] measurePeak(Hist full, double from, double to, int bins) {
+        // Never narrower than the data's own bins: integer values in narrower bins leave most
+        // bins empty, and the peak collapses to one spike
+        bins = (int) Math.max(8, Math.min(bins, Math.floor((to - from) / full.binWidth)));
+        double width = (to - from) / bins;
+        double[] counts = new double[bins];
+        double total = 0;
         for (int i = 0; i < full.counts.length; i++) {
             double centre = full.lo + (i + 0.5) * full.binWidth;
-            int j = (int) ((centre - lo) / width);
-            if (j >= 0 && j < PEAK_BINS) {
+            int j = (int) ((centre - from) / width);
+            if (j >= 0 && j < bins) {
                 counts[j] += full.counts[i];
+                total += full.counts[i];
             }
+        }
+        if (total <= 0) {
+            return null;
         }
         double[] smooth = smooth(counts);
         int mode = 0;
-        for (int i = 1; i < PEAK_BINS; i++) {
+        for (int i = 1; i < bins; i++) {
             if (smooth[i] > smooth[mode]) {
                 mode = i;
             }
@@ -119,36 +175,37 @@ public final class BackgroundContrast {
             left--;
         }
         int right = mode;
-        while (right < PEAK_BINS - 1 && smooth[right] > half) {
+        while (right < bins - 1 && smooth[right] > half) {
             right++;
         }
         // The rising edge is noise only; the falling edge carries signal. Use the right
         // side only when the peak sits against the lowest value (background clipped at 0).
         boolean leftClipped = smooth[left] > half;
         int halfBins = Math.max(1, leftClipped ? right - mode : mode - left);
-        double noise = halfBins * width / HWHM_PER_SIGMA;
-        // The top of a noisy peak is flat; its centroid over a window symmetric about
-        // the peak is steadier than the tallest bin
+        // The top of a noisy peak is flat, so the tallest bin wanders; its centroid over a
+        // window symmetric about the peak is steadier, and the width is measured from it
         double sum = 0;
         double weighted = 0;
-        for (int i = Math.max(0, mode - halfBins); i <= Math.min(PEAK_BINS - 1, mode + halfBins); i++) {
+        for (int i = Math.max(0, mode - halfBins); i <= Math.min(bins - 1, mode + halfBins); i++) {
             sum += counts[i];
             weighted += counts[i] * i;
         }
-        double background = lo + ((sum > 0 ? weighted / sum : mode) + 0.5) * width;
-        if (noise > MAX_PEAK_WIDTH_FRACTION * (p999 - background)) {
-            return null;
+        double centre = sum > 0 ? weighted / sum : mode;
+        double halfWidth = leftClipped
+                ? crossing(smooth, right, right - 1, half) - centre
+                : centre - crossing(smooth, left, left + 1, half);
+        double noise = Math.max(1.0, halfWidth) * width / HWHM_PER_SIGMA;
+        return new double[] {from + (centre + 0.5) * width, noise};
+    }
+
+    /** Where the counts cross {@code half} between bin {@code outside} (at or below it) and {@code inside}. */
+    private static double crossing(double[] smooth, int outside, int inside, double half) {
+        if (inside < 0 || inside >= smooth.length || smooth[outside] > half) {
+            return outside;
         }
-        double min = background + noiseMultiple * noise;
-        double foreground = full.fractionAbove(min);
-        if (foreground < MIN_FOREGROUND_FRACTION) {
-            return null;
-        }
-        double max = full.quantile(1 - saturated * foreground);
-        if (!(max > min)) {
-            return null;
-        }
-        return new Result(min, max, background, noise, foreground, true);
+        double span = smooth[inside] - smooth[outside];
+        double t = span > 0 ? (half - smooth[outside]) / span : 0;
+        return outside + t * (inside - outside);
     }
 
     private static double[] smooth(double[] counts) {

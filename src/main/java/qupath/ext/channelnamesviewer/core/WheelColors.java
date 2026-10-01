@@ -1,6 +1,7 @@
 /*
  * Colour wheel maths ported from Sara McArdle's Channel Color Chooser
- * (https://saramcardle.github.io/ColorWheelPicker/, MIT License, Copyright (c) Sara McArdle).
+ * (https://saramcardle.github.io/ColorWheelPicker/, MIT License, Copyright (c) 2026 Sara McArdle;
+ * full notice in THIRD-PARTY-NOTICES.md).
  */
 package qupath.ext.channelnamesviewer.core;
 
@@ -12,7 +13,7 @@ public final class WheelColors {
     /** Colour model of the wheel. */
     public enum Mode {
         HSV("HSV"),
-        CIELAB("CIELAB (perceptually uniform)");
+        CIELAB("CIELAB (equal lightness)");
 
         private final String displayName;
 
@@ -67,20 +68,38 @@ public final class WheelColors {
     }
 
     /**
-     * Which spoke each channel takes. In order, channel i gets spoke i; spread, neighbouring
-     * channels are about 137 degrees apart so channels listed together differ most.
+     * Which spoke each channel takes. In order, channel i gets spoke i. Spread, each channel
+     * takes the free spoke farthest from the previous channel's, so channels listed next to
+     * each other get very different colors.
      */
     public static int[] spokeOrder(int n, boolean spread) {
         int[] order = new int[n];
-        int stride = 1;
-        if (spread && n > 3) {
-            stride = (int) Math.round(n * 0.382);
-            while (gcd(stride, n) != 1) {
-                stride++;
+        if (!spread) {
+            for (int i = 0; i < n; i++) {
+                order[i] = i;
             }
+            return order;
         }
-        for (int i = 0; i < n; i++) {
-            order[i] = (int) ((long) i * stride % n);
+        boolean[] used = new boolean[n];
+        int current = 0;
+        used[0] = true;
+        for (int i = 1; i < n; i++) {
+            int best = -1;
+            int bestGap = -1;
+            for (int s = 0; s < n; s++) {
+                if (used[s]) {
+                    continue;
+                }
+                int d = Math.abs(s - current);
+                int gap = Math.min(d, n - d);
+                if (gap > bestGap) {
+                    bestGap = gap;
+                    best = s;
+                }
+            }
+            used[best] = true;
+            current = best;
+            order[i] = best;
         }
         return order;
     }
@@ -106,10 +125,6 @@ public final class WheelColors {
     static double normalize(double deg) {
         double d = deg % 360;
         return d < 0 ? d + 360 : d;
-    }
-
-    private static int gcd(int a, int b) {
-        return b == 0 ? a : gcd(b, a % b);
     }
 
     static int[] hsvToRgb(double h, double s, double v) {

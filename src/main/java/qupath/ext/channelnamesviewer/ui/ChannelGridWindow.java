@@ -479,8 +479,9 @@ public class ChannelGridWindow implements QuPathViewerListener {
                 buildMenu(this).show(this, e.getScreenX(), e.getScreenY());
                 e.consume();
             });
-            Tooltip.install(this, Tooltips.of("Right-click for options: show this in the main viewer, "
-                    + "choose a preset, remove it from the grid, grayscale."));
+            Tooltip.install(this, Tooltips.of(tilePreset != null || channel == null
+                    ? "Right-click to show this in the main viewer or remove it from the grid."
+                    : "Right-click to show this in the main viewer, pick a preset, remove it, or show it in grayscale."));
         }
 
         /** Identifies the panel across rebuilds: its channel's name, or the merged panel. */
@@ -836,7 +837,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
             addShowChoices(menu, panel);
         }
 
-        var panelsMenu = Tooltips.on(new Menu("Panels..."), "What the grid shows.");
+        var panelsMenu = Tooltips.on(new Menu("Panels..."), "Choose which panels the grid shows.");
         var panelsGroup = new ToggleGroup();
         for (Panels m : Panels.values()) {
             var item = Tooltips.on(new RadioMenuItem(m.label), switch (m) {
@@ -855,13 +856,13 @@ public class ChannelGridWindow implements QuPathViewerListener {
             panelsMenu.getItems().add(item);
         }
 
-        var syncMenu = Tooltips.on(new Menu("Sync to..."), "What the panels centre on.");
+        var syncMenu = Tooltips.on(new Menu("Sync to..."), "Choose what the panels center on.");
         var syncGroup = new ToggleGroup();
         for (Sync s : Sync.values()) {
             var item = Tooltips.on(new RadioMenuItem(s.label), switch (s) {
                 case CURSOR -> "Follow the mouse over the main viewer. Hold Shift to stop following.";
-                case VIEWER_CENTER -> "The centre of the main viewer.";
-                case SELECTED_OBJECT -> "The selected object, or the viewer centre if none is selected.";
+                case VIEWER_CENTER -> "The center of the main viewer.";
+                case SELECTED_OBJECT -> "The selected object, or the viewer center if none is selected.";
                 case NONE -> "Stay where they are.";
             });
             item.setToggleGroup(syncGroup);
@@ -894,8 +895,8 @@ public class ChannelGridWindow implements QuPathViewerListener {
                         "Draw annotations and detections, as in the main viewer."),
                 new SeparatorMenuItem(),
                 Tooltips.on(check("All channels in grayscale", ChannelToolsPreferences.GRID_GRAYSCALE),
-                        "Show every channel panel in grayscale; often easier to read than dark colours. "
-                        + "The main viewer keeps its colours."));
+                        "Show every channel panel in grayscale, which is easier to read than dark colors. "
+                        + "The main viewer keeps its colors."));
 
         if (panel.channel != null && panel.preset == null) {
             var one = Tooltips.on(new CheckMenuItem("This channel in grayscale (" + panel.channel.getName() + ")"),
@@ -922,7 +923,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
     private void addShowChoices(ContextMenu menu, Panel panel) {
         var showGroup = new ToggleGroup();
         var own = Tooltips.on(new RadioMenuItem(panel.channel == null ? "Merged image" : panel.channel.getName()),
-                "Show the panel's own channel.");
+                "Show the panel's own channel, or the merged image.");
         own.setToggleGroup(showGroup);
         own.setSelected(panel.preset == null);
         own.setOnAction(e -> panel.showPreset(null));
@@ -937,7 +938,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
         }
         for (String name : names) {
             var item = Tooltips.on(new RadioMenuItem("Preset: " + name),
-                    "Show this display preset's channels, colours and ranges in this panel.");
+                    "Show this display preset's channels, colors and ranges in this panel.");
             item.setToggleGroup(showGroup);
             item.setSelected(panel.preset != null && name.equals(panel.preset.name()));
             item.setOnAction(e -> panel.showPreset(name));

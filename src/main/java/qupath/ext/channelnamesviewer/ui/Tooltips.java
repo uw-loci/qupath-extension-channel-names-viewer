@@ -37,11 +37,9 @@ public final class Tooltips {
         var url = Tooltips.class.getResource(resource);
         if (url != null) {
             var view = new ImageView(new Image(url.toExternalForm()));
-            view.setPreserveRatio(true);
-            view.setFitWidth(440);
             tip.setGraphic(view);
             tip.setContentDisplay(javafx.scene.control.ContentDisplay.TOP);
-            tip.setMaxWidth(470);
+            tip.setMaxWidth(view.getImage().getWidth() + 30);
         }
         return tip;
     }

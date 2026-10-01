@@ -60,7 +60,7 @@ public class ColorWheelWindow {
             new ComboBox<>(javafx.collections.FXCollections.observableArrayList(WheelColors.Mode.values()));
     private final Slider lightnessSlider = new Slider();
     private final Label lightnessLabel = new Label();
-    private final CheckBox spreadCheck = new CheckBox("Spread neighbouring channels apart");
+    private final CheckBox spreadCheck = new CheckBox("Spread neighboring channels apart");
     private final GridPane rowsPane = new GridPane();
     private final Label status = new Label();
 
@@ -118,9 +118,9 @@ public class ColorWheelWindow {
         } catch (IllegalArgumentException e) {
             modeCombo.setValue(WheelColors.Mode.HSV);
         }
-        modeCombo.setTooltip(Tooltips.of("HSV: plain hues at full strength. CIELAB: hues of equal perceived "
-                + "brightness, so no channel looks dimmer than another."));
-        lightnessSlider.setTooltip(Tooltips.of("How bright the colours are: HSV value, or CIELAB lightness L*."));
+        modeCombo.setTooltip(Tooltips.of("HSV: pure hues. CIELAB: hues of equal lightness, each as vivid "
+                + "as the screen allows, so no color is darker than another."));
+        lightnessSlider.setTooltip(Tooltips.of("How bright all the colors are; lower gives darker colors."));
         modeCombo.valueProperty().addListener((o, a, b) -> {
             ChannelToolsPreferences.WHEEL_MODE.set(b.name());
             configureSlider();
@@ -137,8 +137,8 @@ public class ColorWheelWindow {
             rebuildWheel();
         });
         spreadCheck.setSelected(ChannelToolsPreferences.WHEEL_SPREAD.get());
-        spreadCheck.setTooltip(Tooltips.of("Give channels that are listed next to each other colours "
-                + "far apart on the wheel, instead of neighbouring hues."));
+        spreadCheck.setTooltip(Tooltips.of("Give channels that sit next to each other in the list colors "
+                + "far apart on the wheel."));
         spreadCheck.selectedProperty().addListener((o, a, b) -> {
             ChannelToolsPreferences.WHEEL_SPREAD.set(b);
             preview();
@@ -157,13 +157,13 @@ public class ColorWheelWindow {
         });
         canvas.setOnMouseDragged(e -> rotateTo(e.getX(), e.getY()));
         canvas.setOnMouseReleased(e -> commit());
-        Tooltip.install(canvas, Tooltips.of("Drag any spoke to rotate all the colours together."));
+        Tooltip.install(canvas, Tooltips.of("Drag any spoke to rotate all the colors together."));
 
         var revert = new Button("Revert");
-        revert.setTooltip(Tooltips.of("Restore the colours the channels had when this window opened."));
+        revert.setTooltip(Tooltips.of("Restore the colors the channels had when this window opened."));
         revert.setOnAction(e -> revert());
         var copy = new Button("Copy script");
-        copy.setTooltip(Tooltips.of("Copy a Groovy script that sets these colours, for other images with the same channels."));
+        copy.setTooltip(Tooltips.of("Copy a Groovy script that sets these colors on other images with the same channels in the same order."));
         copy.setOnAction(e -> copyScript());
 
         var modeBox = new HBox(8, new Label("Wheel:"), modeCombo);
@@ -172,9 +172,9 @@ public class ColorWheelWindow {
         lightBox.setAlignment(Pos.CENTER_LEFT);
         rowsPane.setHgap(8);
         rowsPane.setVgap(4);
-        var note = new Label("Colours apply as you change them, as in Brightness/Contrast; Revert "
-                + "restores the ones the channels had when this window opened.\nColor wheel by Sara "
-                + "McArdle (saramcardle.github.io/ColorWheelPicker).");
+        var note = new Label("Opening the wheel recolors the visible channels. Changes apply as you make "
+                + "them; Revert restores the colors from when the window opened.\nColor wheel by Sara "
+                + "McArdle (saramcardle.github.io/ColorWheelPicker), MIT License.");
         note.setWrapText(true);
         note.setMaxWidth(320);
         note.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
@@ -282,7 +282,7 @@ public class ColorWheelWindow {
         rowsPane.getChildren().clear();
         if (channels.isEmpty()) {
             status.setText(imageData == null ? "No image open."
-                    : "Select the channels to colour in Brightness/Contrast.");
+                    : "Select the channels to color in Brightness/Contrast.");
             return;
         }
         int[] colors = colors();
@@ -436,8 +436,8 @@ public class ColorWheelWindow {
         }
         writeMetadata(new java.util.HashMap<>(original));
         rowsPane.getChildren().clear();
-        status.setText("Restored the original colours. Drag a spoke to recolour.");
-        logger.info("Colour wheel reverted {} channel colours", original.size());
+        status.setText("Restored the original colors. Drag a spoke to recolor.");
+        logger.info("Color wheel reverted {} channel colors", original.size());
     }
 
     private void copyScript() {
@@ -449,9 +449,11 @@ public class ColorWheelWindow {
         String[] args = new String[nAll];
         java.util.Arrays.fill(args, "null");
         var sb = new StringBuilder();
-        sb.append("// Channel colours from the Channel Names Viewer colour wheel (")
-                .append(wheel.mode().name()).append(String.format(", lightness %.2f", wheel.lightness()))
-                .append(")\n// null leaves a channel's colour unchanged\n");
+        sb.append("// Channel colors from the Channel Names Viewer color wheel (")
+                .append(wheel.mode() == WheelColors.Mode.CIELAB
+                        ? String.format("CIELAB, L* %.0f", wheel.lightness())
+                        : String.format("HSV, value %.0f%%", 100 * wheel.lightness()))
+                .append(")\n// Colors are set by channel position; null leaves a channel unchanged\n");
         for (int i = 0; i < channels.size(); i++) {
             int rgb = colors[i];
             int index = channels.get(i).getChannel();

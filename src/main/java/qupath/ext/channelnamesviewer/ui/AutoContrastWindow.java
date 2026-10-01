@@ -102,14 +102,14 @@ public class AutoContrastWindow {
         }
         stage.show();
         live = true; // opening the tool applies it
+        logNext = true;
         sampleCurrentImage();
     }
 
     private VBox buildContent() {
-        var intro = new Label("Sets each channel's minimum just above its background peak -- the tall, "
-                + "narrow peak of the histogram -- so background shows as black and many channels do not "
-                + "add up to a haze. The maximum is set from the brightest pixels above that minimum. "
-                + "Changes show in the viewer immediately; Revert restores the previous ranges.");
+        var intro = new Label("Sets each channel's minimum above its background peak, so background shows "
+                + "as black instead of haze, and its maximum from the brightest pixels above that. "
+                + "Opening this window applies the ranges; Revert restores the previous ones.");
         intro.setWrapText(true);
         intro.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
         intro.setStyle("-fx-text-fill: -fx-mid-text-color;");
@@ -129,9 +129,8 @@ public class AutoContrastWindow {
         noiseSlider.setShowTickLabels(true);
         noiseSlider.setBlockIncrement(0.5);
         noiseSlider.setPrefWidth(260);
-        noiseSlider.setTooltip(Tooltips.of("How far above the background peak the minimum sits, in "
-                + "multiples of the background noise (its standard deviation, measured from the peak's "
-                + "rising edge). 3 hides about 99.9% of background pixels; raise it if haze remains."));
+        noiseSlider.setTooltip(Tooltips.of("How many noise widths above the background peak the minimum "
+                + "sits. 3 hides about 99.9% of a Gaussian background; raise it if haze remains."));
         noiseSlider.valueProperty().addListener((o, a, b) -> {
             ChannelToolsPreferences.NOISE_MULTIPLE.set(b.doubleValue());
             recompute();
@@ -139,8 +138,8 @@ public class AutoContrastWindow {
         saturatedSpinner.getValueFactory().setValue(ChannelToolsPreferences.SATURATED_PERCENT.get());
         saturatedSpinner.setEditable(true);
         saturatedSpinner.setPrefWidth(80);
-        saturatedSpinner.setTooltip(Tooltips.of("Percent of the pixels above the minimum that may "
-                + "saturate at the maximum."));
+        saturatedSpinner.setTooltip(Tooltips.of("Percent of the pixels above the minimum shown at full "
+                + "brightness. Raise it to brighten the channel."));
         saturatedSpinner.valueProperty().addListener((o, a, b) -> {
             ChannelToolsPreferences.SATURATED_PERCENT.set(b);
             recompute();
@@ -152,20 +151,20 @@ public class AutoContrastWindow {
         controls.setAlignment(Pos.CENTER_LEFT);
         var noiseBox = new HBox(10, new Label("Minimum:"), noiseSlider, noiseLabel);
         noiseBox.setAlignment(Pos.CENTER_LEFT);
-        var satBox = new HBox(10, new Label("Saturate brightest (%):"), saturatedSpinner);
+        var satBox = new HBox(10, new Label("Full brightness (%):"), saturatedSpinner);
         satBox.setAlignment(Pos.CENTER_LEFT);
 
         buildTable();
 
         applyButton.setOnAction(e -> {
             live = true;
-            applyRanges();
+            applyRanges(true);
         });
-        applyButton.setTooltip(Tooltips.of("Set the listed display ranges; later changes apply as you make them."));
+        applyButton.setTooltip(Tooltips.of("Apply the table's ranges to the viewer. After that, changes apply at once."));
         revertButton.setOnAction(e -> revert());
-        revertButton.setTooltip(Tooltips.of("Restore the ranges the channels had before this tool changed them."));
+        revertButton.setTooltip(Tooltips.of("Restore this image's ranges from before the tool changed them."));
         var resample = new Button("Resample");
-        resample.setTooltip(Tooltips.of("Read the pixels again, e.g. after moving to another z-slice or timepoint."));
+        resample.setTooltip(Tooltips.of("Read the pixels again after you move to another z-slice or timepoint."));
         resample.setOnAction(e -> sampleCurrentImage());
         var buttons = new HBox(8, applyButton, revertButton, resample);
         status.setWrapText(true);
@@ -195,7 +194,7 @@ public class AutoContrastWindow {
             }
         });
         nameCol.setPrefWidth(140);
-        header(nameCol, "Channel", "The channel and its display colour.");
+        header(nameCol, "Channel", "The channel and its display color.");
 
         var histCol = new TableColumn<Row, Row>("Histogram");
         histCol.setCellValueFactory(c -> new javafx.beans.property.SimpleObjectProperty<>(c.getValue()));
@@ -214,17 +213,17 @@ public class AutoContrastWindow {
         table.getColumns().add(nameCol);
         table.getColumns().add(histCol);
         table.getColumns().add(header(numberColumn("Background", r -> r.result().background()),
-                "Background", "Pixel value of the background peak: the most common value."));
+                "Background", "Pixel value at the center of the background peak."));
         table.getColumns().add(header(numberColumn("Noise", r -> r.result().noise()),
-                "Noise", "Spread of the background (standard deviation), measured on the peak's rising side."));
+                "Noise", "Spread of the background (standard deviation), measured on the low side of the peak."));
         table.getColumns().add(header(numberColumn("Min", r -> r.result().min()),
-                "Min", "Display minimum: background + the noise multiple. Values at or below it show as black."));
+                "Min", "Display minimum: background + (noise widths x noise). Values at or below it show as black."));
         table.getColumns().add(header(numberColumn("Max", r -> r.result().max()),
                 "Max", "Display maximum: values at or above it show at full brightness."));
         var noteCol = new TableColumn<Row, String>("Note");
         noteCol.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(note(c.getValue())));
         noteCol.setPrefWidth(230);
-        header(noteCol, "Note", "How much of the channel is above the minimum, or why percentiles were used.");
+        header(noteCol, "Note", "How much of the channel is above the minimum, or why percentiles were used instead.");
         table.getColumns().add(noteCol);
         table.setPlaceholder(new Label("No fluorescence channels to adjust"));
         table.setFixedCellSize(HIST_H + 8);
@@ -272,7 +271,10 @@ public class AutoContrastWindow {
     private static String note(Row row) {
         var r = row.result();
         if (!r.backgroundPeak()) {
-            return "No background peak -- percentiles used";
+            return "No narrow background peak (dense stain or empty channel) -- percentiles used";
+        }
+        if (r.empty()) {
+            return "Almost nothing above min -- channel may be empty";
         }
         return String.format("%.1f%% of pixels above min", 100 * r.foreground());
     }
@@ -412,14 +414,18 @@ public class AutoContrastWindow {
         table.setItems(FXCollections.observableArrayList(rows));
         status.setText(String.format("%d channel(s) from %,d sampled pixels each%s%s.", rows.size(),
                 samples.length > 0 ? samples[0].length : 0,
-                fallbacks > 0 ? "; " + fallbacks + " without a background peak used percentiles" : "",
+                fallbacks > 0 ? "; " + fallbacks + " without a narrow background peak used percentiles" : "",
                 live ? "" : "; press Apply to set them"));
         if (live) {
-            applyRanges();
+            applyRanges(logNext);
+            logNext = false;
         }
     }
 
-    private void applyRanges() {
+    /** True when the next applied ranges should be logged: on opening and on Apply, not on every drag. */
+    private boolean logNext = true;
+
+    private void applyRanges(boolean log) {
         var display = display();
         if (display == null) {
             return;
@@ -428,7 +434,18 @@ public class AutoContrastWindow {
             original.computeIfAbsent(row.info(),
                     i -> new float[] {i.getMinDisplay(), i.getMaxDisplay()});
             display.setMinMaxDisplay(row.info(), (float) row.result().min(), (float) row.result().max());
+            if (log) {
+                var r = row.result();
+                logger.info("Auto contrast {}: min={} max={} background={} noise={} ({} x noise, {}% full brightness{})",
+                        row.name(), fmt(r.min()), fmt(r.max()), fmt(r.background()), fmt(r.noise()),
+                        noiseSlider.getValue(), saturatedSpinner.getValue(),
+                        r.backgroundPeak() ? "" : "; no narrow background peak, percentiles used");
+            }
         }
+    }
+
+    private static String fmt(double v) {
+        return Double.isNaN(v) ? "-" : String.format("%.4g", v);
     }
 
     private void revert() {

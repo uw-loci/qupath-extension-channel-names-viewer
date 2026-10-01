@@ -107,4 +107,35 @@ class BackgroundContrastTest {
         assertTrue(res.max() > res.min());
         assertFalse(res.backgroundPeak());
     }
+
+    @Test
+    void channelWithNoSignalIsMeasuredOnFineBinsThenFallsBack() {
+        // Pure background: a single Gaussian peak, which has the same shape as a dense stain
+        // filling the field, so it cannot be told from one and falls back to percentiles.
+        // Integer data spanning ~230 values must still give the true noise, not a 1-bin spike.
+        Random r = new Random(8);
+        float[] v = new float[400_000];
+        for (int i = 0; i < v.length; i++) {
+            v[i] = (float) Math.max(0, Math.round(300 + r.nextGaussian() * 30));
+        }
+        var res = BackgroundContrast.compute(v, 3, 0.005, 0.001);
+        assertFalse(res.backgroundPeak());
+        assertTrue(res.max() > res.min());
+    }
+
+    @Test
+    void lowNoiseBesideBrightSignalIsMeasuredOnFineBins() {
+        // SD 5 background with signal near 30000: coarse bins alone are ~15 values wide
+        Random r = new Random(9);
+        float[] v = new float[400_000];
+        for (int i = 0; i < v.length; i++) {
+            double x = r.nextDouble() < 0.05 ? 30000 + r.nextGaussian() * 2000 : 200 + r.nextGaussian() * 5;
+            v[i] = (float) Math.max(0, Math.round(x));
+        }
+        var res = BackgroundContrast.compute(v, 3, 0.005, 0.001);
+        assertTrue(res.backgroundPeak());
+        assertEquals(200, res.background(), 2);
+        assertEquals(5, res.noise(), 1.5);
+        assertFalse(res.empty());
+    }
 }
