@@ -163,7 +163,9 @@ public class ChannelGridWindow implements QuPathViewerListener {
         stage.initOwner(qupath.getStage());
         stage.initModality(Modality.NONE);
         stage.setTitle(TITLE);
-        grid.setStyle("-fx-background-color: black;");
+        grid.setHgap(SEPARATOR_PX);
+        grid.setVgap(SEPARATOR_PX);
+        updateSeparators();
         stage.setScene(new Scene(grid, 640, 520));
         stage.setOnShown(e -> {
             qupath.viewerProperty().addListener(viewerListener);
@@ -198,8 +200,22 @@ public class ChannelGridWindow implements QuPathViewerListener {
     private final InvalidationListener prefRebuild = o -> rebuildPanels();
     private final InvalidationListener grayscaleListener = o -> {
         localChanges.incrementAndGet();
+        updateSeparators();
         requestUpdate();
     };
+
+    /** Width of the lines between panels. */
+    private static final int SEPARATOR_PX = 2;
+
+    /**
+     * Color the lines between panels: yellow when every channel is gray, where dark lines
+     * would vanish between dark panels; dark gray otherwise, so they do not compete with
+     * channel colors. The gaps show the grid's background.
+     */
+    private void updateSeparators() {
+        grid.setStyle("-fx-background-color: "
+                + (ChannelToolsPreferences.GRID_GRAYSCALE.get() ? "#ffd400" : "#3a3a3a") + ";");
+    }
 
     public void show() {
         if (stage.isShowing()) {
@@ -372,6 +388,13 @@ public class ChannelGridWindow implements QuPathViewerListener {
             GridPane.setHgrow(cell, Priority.ALWAYS);
             GridPane.setVgrow(cell, Priority.ALWAYS);
             grid.add(cell, i % cols, i / cols);
+        }
+        // Unused cells stay black rather than showing the separator color
+        for (int i = n; i < rows * cols; i++) {
+            var filler = new Pane();
+            filler.setStyle("-fx-background-color: black;");
+            filler.setMinSize(0, 0);
+            grid.add(filler, i % cols, i / cols);
         }
         requestUpdate();
     }
