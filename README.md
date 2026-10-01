@@ -50,7 +50,7 @@ After restart you will see the new toolbar button next to QuPath's brightness/co
 
 ## Channel tools
 
-Two tools for multichannel fluorescence display open from **Extensions > Channel Names Viewer**, and from the right-click menu of the toolbar button or the legend window.
+Three tools for multichannel fluorescence display open from **Extensions > Channel Names Viewer**, and from the right-click menu of the toolbar button or the legend window.
 
 ### Background-aware auto contrast
 
@@ -71,6 +71,15 @@ Colours the visible channels with evenly spaced hues around a colour wheel -- on
 
 The colour wheel is a port of Sara McArdle's [Channel Color Chooser](https://saramcardle.github.io/ColorWheelPicker/) (MIT License).
 
+### Channel grid viewer
+
+A grid of panels, one per visible channel (or every channel), plus the merged image, that follow the main viewer -- like QuPath's own **View > Channel viewer**, with grayscale display that does not change the main viewer:
+
+- **All channels in grayscale** (bottom of the right-click menu) shows every channel panel in grayscale; **This channel in grayscale** does it for the panel you right-clicked. Grayscale is often easier to read than a dark channel colour such as blue. The merged panel and the main viewer keep their colours.
+- **Sync to** the cursor, the viewer centre or the selected object (or not at all); hold **Shift** to freeze the cursor sync. **Zoom** sets the magnification, or **Same as main viewer**.
+- Panels use the main viewer's display ranges and colours, so Brightness/Contrast and the background-aware auto contrast show up immediately.
+- **Show all channels**, **Show merged image**, **Show channel names**, **Show cursor** and **Show overlays** as in QuPath's channel viewer.
+
 ---
 
 ## Coexistence with the original Groovy script
@@ -81,7 +90,7 @@ This extension does not replace [Sara McArdle's `FluorescentChannelNames.groovy`
 
 ## What's new
 
-**v1.1.0** — New channel tools: background-aware auto contrast (display minimum set from each channel's background peak, removing the haze many channels add up to) and a channel colour wheel (port of Sara McArdle's Channel Color Chooser). See [Channel tools](#channel-tools).
+**v1.1.0** — New channel tools: background-aware auto contrast (display minimum set from each channel's background peak, removing the haze many channels add up to), a channel colour wheel (port of Sara McArdle's Channel Color Chooser), and a channel grid viewer that can show any or all channels in grayscale without changing the main viewer. See [Channel tools](#channel-tools).
 
 **v1.0.9** — Toolbar button icon redesigned from the `Ch` text glyph to a theme-aware three-bar icon.
 

@@ -38,4 +38,30 @@ public final class ChannelToolsPreferences {
 
     public static final BooleanProperty WHEEL_SPREAD =
             PathPrefs.createPersistentPreference(PREFIX + "wheelSpread", false);
+
+    /** Channel grid viewer: where panels centre (CURSOR, VIEWER_CENTER, SELECTED_OBJECT, NONE). */
+    public static final StringProperty GRID_SYNC =
+            PathPrefs.createPersistentPreference(PREFIX + "grid.sync", "CURSOR");
+
+    /** Channel grid viewer downsample; 0 = same as the main viewer. */
+    public static final DoubleProperty GRID_DOWNSAMPLE =
+            PathPrefs.createPersistentPreference(PREFIX + "grid.downsample", 1.0);
+
+    public static final BooleanProperty GRID_ALL_CHANNELS =
+            PathPrefs.createPersistentPreference(PREFIX + "grid.allChannels", false);
+
+    public static final BooleanProperty GRID_MERGED =
+            PathPrefs.createPersistentPreference(PREFIX + "grid.merged", true);
+
+    public static final BooleanProperty GRID_GRAYSCALE =
+            PathPrefs.createPersistentPreference(PREFIX + "grid.grayscale", false);
+
+    public static final BooleanProperty GRID_NAMES =
+            PathPrefs.createPersistentPreference(PREFIX + "grid.names", true);
+
+    public static final BooleanProperty GRID_CURSOR =
+            PathPrefs.createPersistentPreference(PREFIX + "grid.cursor", true);
+
+    public static final BooleanProperty GRID_OVERLAYS =
+            PathPrefs.createPersistentPreference(PREFIX + "grid.overlays", true);
 }

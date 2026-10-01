@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.channelnamesviewer.core.ChannelLegendController;
 import qupath.ext.channelnamesviewer.preferences.ChannelNamesViewerPreferences;
 import qupath.ext.channelnamesviewer.ui.AutoContrastWindow;
+import qupath.ext.channelnamesviewer.ui.ChannelGridWindow;
 import qupath.ext.channelnamesviewer.ui.ChannelLegendStage;
 import qupath.ext.channelnamesviewer.ui.ColorWheelWindow;
 import qupath.lib.common.Version;
@@ -140,6 +141,7 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
 
     private AutoContrastWindow autoContrastWindow;
     private ColorWheelWindow colorWheelWindow;
+    private ChannelGridWindow channelGridWindow;
 
     /** New menu items opening the channel tools; one set per menu. */
     private List<MenuItem> toolItems(QuPathGUI qupath) {
@@ -157,7 +159,14 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
             }
             colorWheelWindow.show();
         });
-        return List.of(contrast, wheel);
+        MenuItem gridViewer = new MenuItem(resources.getString("menu.channelGrid"));
+        gridViewer.setOnAction(e -> {
+            if (channelGridWindow == null) {
+                channelGridWindow = new ChannelGridWindow(qupath);
+            }
+            channelGridWindow.show();
+        });
+        return List.of(contrast, wheel, gridViewer);
     }
 
     private void bindAccelerator(QuPathGUI qupath, MenuItem menuItem) {
