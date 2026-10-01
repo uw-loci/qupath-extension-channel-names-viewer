@@ -387,8 +387,11 @@ public class AutoContrastWindow {
         if (samples == null || display == null) {
             return;
         }
-        List<ChannelDisplayInfo> channels = allRadio.isSelected()
-                ? display.availableChannels() : display.selectedChannels();
+        List<ChannelDisplayInfo> channels = new ArrayList<>(allRadio.isSelected()
+                ? display.availableChannels() : display.selectedChannels());
+        // The image's channel order, not the order they were switched on
+        var available = display.availableChannels();
+        channels.sort(java.util.Comparator.comparingInt(available::indexOf));
         double k = noiseSlider.getValue();
         double saturated = saturatedSpinner.getValue() / 100.0;
         List<Row> rows = new ArrayList<>();

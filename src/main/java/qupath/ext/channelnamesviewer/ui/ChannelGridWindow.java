@@ -913,6 +913,8 @@ public class ChannelGridWindow implements QuPathViewerListener {
             });
             menu.getItems().add(one);
         }
+        // Channel and preset names often contain '_', which a menu would take as a mnemonic and hide
+        noMnemonics(menu.getItems());
         return Tooltips.install(menu);
     }
 
@@ -943,6 +945,15 @@ public class ChannelGridWindow implements QuPathViewerListener {
         }
         menu.getItems().add(new SeparatorMenuItem());
 
+    }
+
+    private static void noMnemonics(List<MenuItem> items) {
+        for (var item : items) {
+            item.setMnemonicParsing(false);
+            if (item instanceof Menu sub) {
+                noMnemonics(sub.getItems());
+            }
+        }
     }
 
     private static CheckMenuItem check(String text, BooleanProperty property) {
