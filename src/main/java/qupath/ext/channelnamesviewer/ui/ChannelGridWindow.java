@@ -62,6 +62,7 @@ import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.gui.viewer.QuPathViewerListener;
 import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
+import qupath.lib.projects.Projects;
 
 /**
  * A grid of panels, one per channel, following the main viewer. Like QuPath's channel
@@ -136,6 +137,12 @@ public class ChannelGridWindow implements QuPathViewerListener {
      */
     private List<String> keptChannels;
 
+    /** Seconds between checks of the project's preset folder. */
+    private static final int PRESET_POLL_SECONDS = 2;
+    private java.util.concurrent.ScheduledExecutorService presetPoller;
+    /** Names, sizes and modification times of the preset files at the last check. */
+    private String presetSignature = "";
+
     private final ListChangeListener<ChannelDisplayInfo> channelListener = c -> {
         if (changingMain) {
             return;
@@ -166,6 +173,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
             ChannelToolsPreferences.GRID_MERGED.addListener(prefRebuild);
             ChannelToolsPreferences.GRID_GRAYSCALE.addListener(grayscaleListener);
             bindViewer(qupath.getViewer());
+            startPresetPolling();
         });
         stage.setOnHidden(e -> {
             qupath.viewerProperty().removeListener(viewerListener);
@@ -177,6 +185,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
             ChannelToolsPreferences.GRID_PANELS.removeListener(prefRebuild);
             ChannelToolsPreferences.GRID_MERGED.removeListener(prefRebuild);
             ChannelToolsPreferences.GRID_GRAYSCALE.removeListener(grayscaleListener);
+            stopPresetPolling();
             bindViewer(null);
         });
         stage.widthProperty().addListener((o, a, b) -> requestUpdate());
@@ -636,6 +645,66 @@ public class ChannelGridWindow implements QuPathViewerListener {
             channels.add(info);
         }
         return new PresetView(name, channels, settings.invertBackground());
+    }
+
+    /**
+     * Watch the project's preset folder by polling: QuPath fires no event when a preset is
+     * saved, and file-system watch events are unreliable on network drives and WSL mounts.
+     */
+    private void startPresetPolling() {
+        presetSignature = presetSignature();
+        presetPoller = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+            var t = new Thread(r, "channel-grid-presets");
+            t.setDaemon(true);
+            return t;
+        });
+        presetPoller.scheduleWithFixedDelay(() -> {
+            String now = presetSignature();
+            if (!now.equals(presetSignature)) {
+                presetSignature = now;
+                Platform.runLater(this::refreshPresets);
+            }
+        }, PRESET_POLL_SECONDS, PRESET_POLL_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    private void stopPresetPolling() {
+        if (presetPoller != null) {
+            presetPoller.shutdownNow();
+            presetPoller = null;
+        }
+    }
+
+    /** The preset files' names, sizes and modification times; empty without a project. */
+    private String presetSignature() {
+        var project = qupath.getProject();
+        if (project == null) {
+            return "";
+        }
+        var dir = new java.io.File(Projects.getBaseDirectory(project), "resources/display");
+        var files = dir.listFiles((d, name) -> name.toLowerCase().endsWith(".json"));
+        if (files == null) {
+            return project.getPath() + ":none";
+        }
+        java.util.Arrays.sort(files);
+        var sb = new StringBuilder(String.valueOf(project.getPath()));
+        for (var f : files) {
+            sb.append('|').append(f.getName()).append(':').append(f.length()).append(':').append(f.lastModified());
+        }
+        return sb.toString();
+    }
+
+    /** Show presets as they are now saved: new and deleted tiles, edited settings. */
+    private void refreshPresets() {
+        if (panelsMode() == Panels.PRESETS) {
+            rebuildPanels();
+            return;
+        }
+        var names = presetNames();
+        for (var panel : panels) {
+            if (panel.preset != null) {
+                panel.showPreset(names.contains(panel.preset.name()) ? panel.preset.name() : null);
+            }
+        }
     }
 
     /** Change the main viewer's channels, keeping the grid's panels as they are. */
