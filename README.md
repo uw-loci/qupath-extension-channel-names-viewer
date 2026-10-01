@@ -75,12 +75,13 @@ The colour wheel is a port of Sara McArdle's [Channel Color Chooser](https://sar
 
 A grid of panels, one per visible channel (or every channel), plus the merged image, that follow the main viewer -- like QuPath's own **View > Channel viewer**, with grayscale display that does not change the main viewer:
 
+- **Panels...** chooses what the grid shows: the **visible channels** (following the main viewer), **all channels**, or **one per display preset** -- a tile for every display preset saved in the project, so groups such as "T cells" and "Tumor" sit side by side as you pan.
 - **Use ... in main viewer** (first item of a panel's right-click menu) shows that panel's channel -- or its preset -- in the main viewer. The grid keeps its panels, so you can switch the main viewer between them. A menu item rather than a click, so a stray click does nothing.
 - **Show a display preset in a panel:** below that, pick the panel's own channel or any display preset saved in the project (Brightness/Contrast > save settings). The panel then shows that preset's channels, colours and ranges, so channel groups sit side by side as you pan -- without changing the main viewer.
 - **All channels in grayscale** (bottom of the right-click menu) shows every channel panel in grayscale; **This channel in grayscale** does it for the panel you right-clicked. Grayscale is often easier to read than a dark channel colour such as blue. The merged panel and the main viewer keep their colours.
 - **Sync to** the cursor, the viewer centre or the selected object (or not at all); hold **Shift** to freeze the cursor sync. **Zoom** sets the magnification, or **Same as main viewer**.
 - Panels use the main viewer's display ranges and colours, so Brightness/Contrast and the background-aware auto contrast show up immediately.
-- **Show all channels**, **Show merged image**, **Show channel names**, **Show cursor** and **Show overlays** as in QuPath's channel viewer.
+- **Show merged image**, **Show channel names**, **Show cursor** and **Show overlays** as in QuPath's channel viewer.
 
 ---
 

@@ -47,8 +47,9 @@ public final class ChannelToolsPreferences {
     public static final DoubleProperty GRID_DOWNSAMPLE =
             PathPrefs.createPersistentPreference(PREFIX + "grid.downsample", 1.0);
 
-    public static final BooleanProperty GRID_ALL_CHANNELS =
-            PathPrefs.createPersistentPreference(PREFIX + "grid.allChannels", false);
+    /** Channel grid viewer panels: VISIBLE channels, ALL channels, or one per display PRESET. */
+    public static final StringProperty GRID_PANELS =
+            PathPrefs.createPersistentPreference(PREFIX + "grid.panels", "VISIBLE");
 
     public static final BooleanProperty GRID_MERGED =
             PathPrefs.createPersistentPreference(PREFIX + "grid.merged", true);

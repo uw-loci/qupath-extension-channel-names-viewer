@@ -85,6 +85,25 @@ public class ChannelGridWindow implements QuPathViewerListener {
         }
     }
 
+    /** What the grid shows. */
+    enum Panels {
+        VISIBLE("Visible channels"), ALL("All channels"), PRESETS("One per display preset");
+
+        private final String label;
+
+        Panels(String label) {
+            this.label = label;
+        }
+    }
+
+    private static Panels panelsMode() {
+        try {
+            return Panels.valueOf(ChannelToolsPreferences.GRID_PANELS.get());
+        } catch (IllegalArgumentException e) {
+            return Panels.VISIBLE;
+        }
+    }
+
     /** Zoom menu entries: label and downsample; 0 = same as the main viewer. */
     private static final Object[][] ZOOMS = {
             {"Same as main viewer", 0.0}, {"400 %", 0.25}, {"200 %", 0.5}, {"100 %", 1.0}, {"50 %", 2.0},
@@ -143,7 +162,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
                     ChannelToolsPreferences.GRID_SYNC)) {
                 p.addListener(prefListener);
             }
-            ChannelToolsPreferences.GRID_ALL_CHANNELS.addListener(prefRebuild);
+            ChannelToolsPreferences.GRID_PANELS.addListener(prefRebuild);
             ChannelToolsPreferences.GRID_MERGED.addListener(prefRebuild);
             ChannelToolsPreferences.GRID_GRAYSCALE.addListener(grayscaleListener);
             bindViewer(qupath.getViewer());
@@ -155,7 +174,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
                     ChannelToolsPreferences.GRID_SYNC)) {
                 p.removeListener(prefListener);
             }
-            ChannelToolsPreferences.GRID_ALL_CHANNELS.removeListener(prefRebuild);
+            ChannelToolsPreferences.GRID_PANELS.removeListener(prefRebuild);
             ChannelToolsPreferences.GRID_MERGED.removeListener(prefRebuild);
             ChannelToolsPreferences.GRID_GRAYSCALE.removeListener(grayscaleListener);
             bindViewer(null);
@@ -269,7 +288,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
     // Panels
     // ------------------------------------------------------------------
 
-    /** One panel per channel shown, plus the merged image if wanted. */
+    /** One panel per channel shown, or per display preset, plus the merged image if wanted. */
     private void rebuildPanels() {
         panels.clear();
         grid.getChildren().clear();
@@ -278,8 +297,30 @@ public class ChannelGridWindow implements QuPathViewerListener {
         if (display == null || viewer == null || viewer.getImageData() == null) {
             return;
         }
+        var mode = panelsMode();
+        if (mode == Panels.PRESETS) {
+            for (String name : presetNames()) {
+                panels.add(new Panel(null, name));
+            }
+            if (panels.isEmpty()) {
+                var none = new javafx.scene.control.Label(qupath.getProject() == null
+                        ? "Display presets need an open project.\nRight-click to show channels instead."
+                        : "No display presets in this project -- save one in Brightness/Contrast.\n"
+                        + "Right-click to show channels instead.");
+                none.setTextFill(Color.WHITE);
+                none.setWrapText(true);
+                none.setOnContextMenuRequested(e -> {
+                    buildMenu(new Panel(null, null)).show(none, e.getScreenX(), e.getScreenY());
+                    e.consume();
+                });
+                grid.add(none, 0, 0);
+                return;
+            }
+        }
         List<ChannelDisplayInfo> channels;
-        if (ChannelToolsPreferences.GRID_ALL_CHANNELS.get()) {
+        if (mode == Panels.PRESETS) {
+            channels = new ArrayList<>();
+        } else if (mode == Panels.ALL) {
             channels = new ArrayList<>(display.availableChannels());
         } else if (keptChannels != null) {
             channels = new ArrayList<>(display.availableChannels().stream()
@@ -287,16 +328,16 @@ public class ChannelGridWindow implements QuPathViewerListener {
         } else {
             channels = new ArrayList<>(display.selectedChannels());
         }
-        if (!ChannelToolsPreferences.GRID_ALL_CHANNELS.get()) {
+        if (mode == Panels.VISIBLE) {
             // Keep the image's channel order, not the order they were switched on
             channels.sort((a, b) -> Integer.compare(display.availableChannels().indexOf(a),
                     display.availableChannels().indexOf(b)));
         }
         for (var c : channels) {
-            panels.add(new Panel(c));
+            panels.add(new Panel(c, null));
         }
         if (ChannelToolsPreferences.GRID_MERGED.get() || panels.isEmpty()) {
-            panels.add(new Panel(null));
+            panels.add(new Panel(null, null));
         }
         int n = panels.size();
         int cols = (int) Math.ceil(Math.sqrt(n));
@@ -371,11 +412,14 @@ public class ChannelGridWindow implements QuPathViewerListener {
         private WritableImage imgFX;
         /** The preset shown instead of the channel; null to show the channel. */
         private PresetView preset;
+        /** The preset this tile is for, in one-per-preset mode; null otherwise. */
+        private final String tilePreset;
 
-        Panel(ChannelDisplayInfo channel) {
+        Panel(ChannelDisplayInfo channel, String tilePreset) {
             this.channel = channel;
+            this.tilePreset = tilePreset;
             this.renderer = new Renderer(this);
-            String presetName = panelPresets.get(key());
+            String presetName = tilePreset != null ? tilePreset : panelPresets.get(key());
             if (presetName != null) {
                 preset = loadPreset(presetName);
             }
@@ -389,7 +433,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
 
         /** Identifies the panel across rebuilds: its channel's name, or the merged panel. */
         String key() {
-            return channel == null ? "<merged>" : channel.getName();
+            return tilePreset != null ? "<preset>" + tilePreset : channel == null ? "<merged>" : channel.getName();
         }
 
         void showPreset(String name) {
@@ -640,27 +684,24 @@ public class ChannelGridWindow implements QuPathViewerListener {
         use.setOnAction(e -> useInMainViewer(panel));
         menu.getItems().addAll(use, new SeparatorMenuItem());
 
-        var showGroup = new ToggleGroup();
-        var own = new RadioMenuItem(panel.channel == null ? "Merged image" : panel.channel.getName());
-        own.setToggleGroup(showGroup);
-        own.setSelected(panel.preset == null);
-        own.setOnAction(e -> panel.showPreset(null));
-        menu.getItems().add(own);
-        var names = presetNames();
-        if (names.isEmpty()) {
-            var none = new MenuItem(qupath.getProject() == null ? "Display presets need an open project"
-                    : "No display presets -- save one in Brightness/Contrast");
-            none.setDisable(true);
-            menu.getItems().add(none);
+        if (panel.tilePreset == null) {
+            addShowChoices(menu, panel);
         }
-        for (String name : names) {
-            var item = new RadioMenuItem("Preset: " + name);
-            item.setToggleGroup(showGroup);
-            item.setSelected(panel.preset != null && name.equals(panel.preset.name()));
-            item.setOnAction(e -> panel.showPreset(name));
-            menu.getItems().add(item);
+
+        var panelsMenu = new Menu("Panels...");
+        var panelsGroup = new ToggleGroup();
+        for (Panels m : Panels.values()) {
+            var item = new RadioMenuItem(m.label);
+            item.setToggleGroup(panelsGroup);
+            item.setSelected(panelsMode() == m);
+            item.setOnAction(e -> {
+                keptChannels = null;
+                ChannelToolsPreferences.GRID_PANELS.set(m.name());
+                // Choosing the current mode again re-reads the presets
+                rebuildPanels();
+            });
+            panelsMenu.getItems().add(item);
         }
-        menu.getItems().add(new SeparatorMenuItem());
 
         var syncMenu = new Menu("Sync to...");
         var syncGroup = new ToggleGroup();
@@ -684,7 +725,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
         }
 
         menu.getItems().addAll(syncMenu, zoomMenu, new SeparatorMenuItem(),
-                check("Show all channels", ChannelToolsPreferences.GRID_ALL_CHANNELS),
+                panelsMenu,
                 check("Show merged image", ChannelToolsPreferences.GRID_MERGED),
                 check("Show channel names", ChannelToolsPreferences.GRID_NAMES),
                 check("Show cursor", ChannelToolsPreferences.GRID_CURSOR),
@@ -708,6 +749,32 @@ public class ChannelGridWindow implements QuPathViewerListener {
             menu.getItems().add(one);
         }
         return menu;
+    }
+
+    /** The panel's own channel and every saved preset, to choose what the panel shows. */
+    private void addShowChoices(ContextMenu menu, Panel panel) {
+        var showGroup = new ToggleGroup();
+        var own = new RadioMenuItem(panel.channel == null ? "Merged image" : panel.channel.getName());
+        own.setToggleGroup(showGroup);
+        own.setSelected(panel.preset == null);
+        own.setOnAction(e -> panel.showPreset(null));
+        menu.getItems().add(own);
+        var names = presetNames();
+        if (names.isEmpty()) {
+            var none = new MenuItem(qupath.getProject() == null ? "Display presets need an open project"
+                    : "No display presets -- save one in Brightness/Contrast");
+            none.setDisable(true);
+            menu.getItems().add(none);
+        }
+        for (String name : names) {
+            var item = new RadioMenuItem("Preset: " + name);
+            item.setToggleGroup(showGroup);
+            item.setSelected(panel.preset != null && name.equals(panel.preset.name()));
+            item.setOnAction(e -> panel.showPreset(name));
+            menu.getItems().add(item);
+        }
+        menu.getItems().add(new SeparatorMenuItem());
+
     }
 
     private static CheckMenuItem check(String text, BooleanProperty property) {
