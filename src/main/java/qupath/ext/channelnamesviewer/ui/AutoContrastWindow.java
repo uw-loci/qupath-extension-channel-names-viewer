@@ -129,7 +129,7 @@ public class AutoContrastWindow {
         noiseSlider.setShowTickLabels(true);
         noiseSlider.setBlockIncrement(0.5);
         noiseSlider.setPrefWidth(260);
-        noiseSlider.setTooltip(new Tooltip("How far above the background peak the minimum sits, in "
+        noiseSlider.setTooltip(Tooltips.of("How far above the background peak the minimum sits, in "
                 + "multiples of the background noise (its standard deviation, measured from the peak's "
                 + "rising edge). 3 hides about 99.9% of background pixels; raise it if haze remains."));
         noiseSlider.valueProperty().addListener((o, a, b) -> {
@@ -139,13 +139,15 @@ public class AutoContrastWindow {
         saturatedSpinner.getValueFactory().setValue(ChannelToolsPreferences.SATURATED_PERCENT.get());
         saturatedSpinner.setEditable(true);
         saturatedSpinner.setPrefWidth(80);
-        saturatedSpinner.setTooltip(new Tooltip("Percent of the pixels above the minimum that may "
+        saturatedSpinner.setTooltip(Tooltips.of("Percent of the pixels above the minimum that may "
                 + "saturate at the maximum."));
         saturatedSpinner.valueProperty().addListener((o, a, b) -> {
             ChannelToolsPreferences.SATURATED_PERCENT.set(b);
             recompute();
         });
 
+        visibleRadio.setTooltip(Tooltips.of("Adjust only the channels shown in the viewer."));
+        allRadio.setTooltip(Tooltips.of("Adjust every channel, shown or not."));
         var controls = new HBox(10, new Label("Apply to:"), visibleRadio, allRadio);
         controls.setAlignment(Pos.CENTER_LEFT);
         var noiseBox = new HBox(10, new Label("Minimum:"), noiseSlider, noiseLabel);
@@ -159,11 +161,11 @@ public class AutoContrastWindow {
             live = true;
             applyRanges();
         });
-        applyButton.setTooltip(new Tooltip("Set the listed display ranges; later changes apply as you make them."));
+        applyButton.setTooltip(Tooltips.of("Set the listed display ranges; later changes apply as you make them."));
         revertButton.setOnAction(e -> revert());
-        revertButton.setTooltip(new Tooltip("Restore the ranges the channels had before this tool changed them."));
+        revertButton.setTooltip(Tooltips.of("Restore the ranges the channels had before this tool changed them."));
         var resample = new Button("Resample");
-        resample.setTooltip(new Tooltip("Read the pixels again, e.g. after moving to another z-slice or timepoint."));
+        resample.setTooltip(Tooltips.of("Read the pixels again, e.g. after moving to another z-slice or timepoint."));
         resample.setOnAction(e -> sampleCurrentImage());
         var buttons = new HBox(8, applyButton, revertButton, resample);
         status.setWrapText(true);
@@ -193,6 +195,7 @@ public class AutoContrastWindow {
             }
         });
         nameCol.setPrefWidth(140);
+        header(nameCol, "Channel", "The channel and its display colour.");
 
         var histCol = new TableColumn<Row, Row>("Histogram");
         histCol.setCellValueFactory(c -> new javafx.beans.property.SimpleObjectProperty<>(c.getValue()));
@@ -201,22 +204,56 @@ public class AutoContrastWindow {
             protected void updateItem(Row row, boolean empty) {
                 super.updateItem(row, empty);
                 setGraphic(empty || row == null ? null : histogram(row));
+                setTooltip(empty || row == null ? null : histogramTooltip());
             }
         });
         histCol.setPrefWidth(HIST_W + 12);
+        header(histCol, "Histogram", null);
+        ((Label) histCol.getGraphic()).setTooltip(histogramTooltip());
 
         table.getColumns().add(nameCol);
         table.getColumns().add(histCol);
-        table.getColumns().add(numberColumn("Background", r -> r.result().background()));
-        table.getColumns().add(numberColumn("Noise", r -> r.result().noise()));
-        table.getColumns().add(numberColumn("Min", r -> r.result().min()));
-        table.getColumns().add(numberColumn("Max", r -> r.result().max()));
+        table.getColumns().add(header(numberColumn("Background", r -> r.result().background()),
+                "Background", "Pixel value of the background peak: the most common value."));
+        table.getColumns().add(header(numberColumn("Noise", r -> r.result().noise()),
+                "Noise", "Spread of the background (standard deviation), measured on the peak's rising side."));
+        table.getColumns().add(header(numberColumn("Min", r -> r.result().min()),
+                "Min", "Display minimum: background + the noise multiple. Values at or below it show as black."));
+        table.getColumns().add(header(numberColumn("Max", r -> r.result().max()),
+                "Max", "Display maximum: values at or above it show at full brightness."));
         var noteCol = new TableColumn<Row, String>("Note");
         noteCol.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(note(c.getValue())));
         noteCol.setPrefWidth(230);
+        header(noteCol, "Note", "How much of the channel is above the minimum, or why percentiles were used.");
         table.getColumns().add(noteCol);
         table.setPlaceholder(new Label("No fluorescence channels to adjust"));
         table.setFixedCellSize(HIST_H + 8);
+    }
+
+    /** Replace a column's title with a label carrying a tooltip (a header has no tooltip of its own). */
+    private static <T extends TableColumn<Row, ?>> T header(T column, String title, String tooltip) {
+        var label = new Label(title);
+        if (tooltip != null) {
+            label.setTooltip(Tooltips.of(tooltip));
+        }
+        column.setText(null);
+        column.setGraphic(label);
+        return column;
+    }
+
+    private static Tooltip histogramTooltip;
+
+    /** One tooltip shared by every histogram, so the picture is loaded once. */
+    private static Tooltip histogramTooltip() {
+        if (histogramTooltip == null) {
+            histogramTooltip = makeHistogramTooltip();
+        }
+        return histogramTooltip;
+    }
+
+    private static Tooltip makeHistogramTooltip() {
+        return Tooltips.withImage("Where this channel's display range sits on its histogram.",
+                "histogram-legend.png");
     }
 
     private static TableColumn<Row, String> numberColumn(String title,

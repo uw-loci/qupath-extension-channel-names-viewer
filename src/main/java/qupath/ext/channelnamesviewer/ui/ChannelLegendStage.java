@@ -742,9 +742,11 @@ public class ChannelLegendStage {
 
         List<MenuItem> tools = toolItems.get();
         if (!tools.isEmpty()) {
+            menu.getItems().add(Tooltips.heading("Channel tools"));
             menu.getItems().addAll(tools);
             menu.getItems().add(new SeparatorMenuItem());
         }
+        menu.getItems().add(Tooltips.heading("Legend window"));
 
         // --- Background opacity slider (CustomMenuItem so the slider stays in the menu) ---
         Slider opacitySlider = new Slider(MIN_OPACITY, MAX_OPACITY, backgroundOpacity.get());
@@ -762,18 +764,18 @@ public class ChannelLegendStage {
         });
         Label sliderLabel = new Label("Background opacity");
         VBox sliderBox = new VBox(2, sliderLabel, opacitySlider);
+        Tooltip.install(sliderBox, Tooltips.of("How see-through the legend window's dark background is."));
         sliderBox.setPadding(new Insets(4, 8, 4, 8));
         CustomMenuItem opacityItem = new CustomMenuItem(sliderBox, false);
         opacityItem.setHideOnClick(false);
         menu.getItems().add(opacityItem);
 
-        menu.getItems().add(new SeparatorMenuItem());
-
         // --- Preserve channel order (v1.0.6+) ---
         // Default true: re-selecting a channel returns it to its original row
         // rather than appending to the bottom. Unchecking restores the legacy
         // selection-order behavior.
-        CheckMenuItem preserveOrderItem = new CheckMenuItem("Preserve channel order");
+        CheckMenuItem preserveOrderItem = Tooltips.on(new CheckMenuItem("Preserve channel order"),
+                "List channels in the image's order. Off: in the order they were switched on.");
         preserveOrderItem.setSelected(ChannelNamesViewerPreferences.getPreserveChannelOrder());
         preserveOrderItem.selectedProperty().addListener((obs, oldVal, newVal) ->
                 ChannelNamesViewerPreferences.setPreserveChannelOrder(newVal));
@@ -787,7 +789,8 @@ public class ChannelLegendStage {
         // on, draw a white halo around each dark (BT.601 luminance < 0.5) glyph
         // so dark channels stay readable without changing the channel hue.
         // Mutually exclusive with the panel-backdrop option below.
-        CheckMenuItem outlineItem = new CheckMenuItem("Outline dark channels in white");
+        CheckMenuItem outlineItem = Tooltips.on(new CheckMenuItem("Outline dark channels in white"),
+                "Draw a white halo around names in dark colours (such as blue) so they stay readable.");
         outlineItem.setSelected(ChannelNamesViewerPreferences.getWhiteTextOutline());
         outlineItem.selectedProperty().addListener((obs, oldVal, newVal) -> {
             ChannelNamesViewerPreferences.setWhiteTextOutline(newVal);
@@ -805,7 +808,8 @@ public class ChannelLegendStage {
         // backdrop chip behind the label so the channel color reads cleanly.
         // Light channels render bare regardless. Mutually exclusive with the
         // white-outline option above.
-        CheckMenuItem panelItem = new CheckMenuItem("Backdrop panel on dark channels");
+        CheckMenuItem panelItem = Tooltips.on(new CheckMenuItem("Backdrop panel on dark channels"),
+                "Put a light patch behind names in dark colours. An alternative to the white outline.");
         panelItem.setSelected(ChannelNamesViewerPreferences.getDarkLabelPanel());
         panelItem.selectedProperty().addListener((obs, oldVal, newVal) -> {
             ChannelNamesViewerPreferences.setDarkLabelPanel(newVal);
@@ -817,10 +821,9 @@ public class ChannelLegendStage {
                 .addListener((obs, oldVal, newVal) -> panelItem.setSelected(newVal));
         menu.getItems().add(panelItem);
 
-        menu.getItems().add(new SeparatorMenuItem());
-
         // --- Lock font size ---
-        CheckMenuItem lockItem = new CheckMenuItem("Lock font size");
+        CheckMenuItem lockItem = Tooltips.on(new CheckMenuItem("Lock font size"),
+                "Keep the text size fixed. Off: text grows and shrinks with the window.");
         lockItem.setSelected(fontLocked.get());
         lockItem.selectedProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal && !fontLocked.get()) {
@@ -832,14 +835,13 @@ public class ChannelLegendStage {
         fontLocked.addListener((obs, oldVal, newVal) -> lockItem.setSelected(newVal));
         menu.getItems().add(lockItem);
 
-        menu.getItems().add(new SeparatorMenuItem());
-
         // --- Reset opacity ---
-        MenuItem resetItem = new MenuItem("Reset background opacity");
+        MenuItem resetItem = Tooltips.on(new MenuItem("Reset background opacity"),
+                "Set the background opacity back to its default (75%).");
         resetItem.setOnAction(e -> backgroundOpacity.set(DEFAULT_OPACITY));
         menu.getItems().add(resetItem);
 
-        return menu;
+        return Tooltips.install(menu);
     }
 
     /** Menu items for the channel tools, put at the top of every settings menu. */

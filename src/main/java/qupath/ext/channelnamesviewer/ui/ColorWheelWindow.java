@@ -118,6 +118,9 @@ public class ColorWheelWindow {
         } catch (IllegalArgumentException e) {
             modeCombo.setValue(WheelColors.Mode.HSV);
         }
+        modeCombo.setTooltip(Tooltips.of("HSV: plain hues at full strength. CIELAB: hues of equal perceived "
+                + "brightness, so no channel looks dimmer than another."));
+        lightnessSlider.setTooltip(Tooltips.of("How bright the colours are: HSV value, or CIELAB lightness L*."));
         modeCombo.valueProperty().addListener((o, a, b) -> {
             ChannelToolsPreferences.WHEEL_MODE.set(b.name());
             configureSlider();
@@ -134,7 +137,7 @@ public class ColorWheelWindow {
             rebuildWheel();
         });
         spreadCheck.setSelected(ChannelToolsPreferences.WHEEL_SPREAD.get());
-        spreadCheck.setTooltip(new Tooltip("Give channels that are listed next to each other colours "
+        spreadCheck.setTooltip(Tooltips.of("Give channels that are listed next to each other colours "
                 + "far apart on the wheel, instead of neighbouring hues."));
         spreadCheck.selectedProperty().addListener((o, a, b) -> {
             ChannelToolsPreferences.WHEEL_SPREAD.set(b);
@@ -154,13 +157,13 @@ public class ColorWheelWindow {
         });
         canvas.setOnMouseDragged(e -> rotateTo(e.getX(), e.getY()));
         canvas.setOnMouseReleased(e -> commit());
-        Tooltip.install(canvas, new Tooltip("Drag any spoke to rotate all the colours together."));
+        Tooltip.install(canvas, Tooltips.of("Drag any spoke to rotate all the colours together."));
 
         var revert = new Button("Revert");
-        revert.setTooltip(new Tooltip("Restore the colours the channels had when this window opened."));
+        revert.setTooltip(Tooltips.of("Restore the colours the channels had when this window opened."));
         revert.setOnAction(e -> revert());
         var copy = new Button("Copy script");
-        copy.setTooltip(new Tooltip("Copy a Groovy script that sets these colours, for other images with the same channels."));
+        copy.setTooltip(Tooltips.of("Copy a Groovy script that sets these colours, for other images with the same channels."));
         copy.setOnAction(e -> copyScript());
 
         var modeBox = new HBox(8, new Label("Wheel:"), modeCombo);

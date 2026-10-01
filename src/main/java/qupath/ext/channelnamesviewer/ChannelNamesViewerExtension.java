@@ -28,6 +28,7 @@ import qupath.ext.channelnamesviewer.ui.AutoContrastWindow;
 import qupath.ext.channelnamesviewer.ui.ChannelGridWindow;
 import qupath.ext.channelnamesviewer.ui.ChannelLegendStage;
 import qupath.ext.channelnamesviewer.ui.ColorWheelWindow;
+import qupath.ext.channelnamesviewer.ui.Tooltips;
 import qupath.lib.common.Version;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.actions.ActionTools;
@@ -134,7 +135,9 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
         // does not show tooltips on MenuItem directly, but we attach for parity.
         item.getProperties().put("tooltip", resources.getString("tooltip.menu"));
         extensionMenu.getItems().add(item);
+        extensionMenu.getItems().add(new javafx.scene.control.SeparatorMenuItem());
         extensionMenu.getItems().addAll(toolItems(qupath));
+        Tooltips.install(extensionMenu);
         logger.info("Registered menu item: Extensions > {}", EXTENSION_NAME);
         return item;
     }
@@ -145,21 +148,24 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
 
     /** New menu items opening the channel tools; one set per menu. */
     private List<MenuItem> toolItems(QuPathGUI qupath) {
-        MenuItem contrast = new MenuItem(resources.getString("menu.autoContrast"));
+        MenuItem contrast = Tooltips.on(new MenuItem(resources.getString("menu.autoContrast")),
+                resources.getString("tooltip.menu.autoContrast"));
         contrast.setOnAction(e -> {
             if (autoContrastWindow == null) {
                 autoContrastWindow = new AutoContrastWindow(qupath);
             }
             autoContrastWindow.show();
         });
-        MenuItem wheel = new MenuItem(resources.getString("menu.colorWheel"));
+        MenuItem wheel = Tooltips.on(new MenuItem(resources.getString("menu.colorWheel")),
+                resources.getString("tooltip.menu.colorWheel"));
         wheel.setOnAction(e -> {
             if (colorWheelWindow == null) {
                 colorWheelWindow = new ColorWheelWindow(qupath);
             }
             colorWheelWindow.show();
         });
-        MenuItem gridViewer = new MenuItem(resources.getString("menu.channelGrid"));
+        MenuItem gridViewer = Tooltips.on(new MenuItem(resources.getString("menu.channelGrid")),
+                resources.getString("tooltip.menu.channelGrid"));
         gridViewer.setOnAction(e -> {
             if (channelGridWindow == null) {
                 channelGridWindow = new ChannelGridWindow(qupath);

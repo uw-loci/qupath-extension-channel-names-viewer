@@ -32,6 +32,7 @@ import javafx.scene.control.MenuItem;
 import javafx.scene.control.RadioMenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.ToggleGroup;
+import javafx.scene.control.Tooltip;
 import javafx.scene.image.WritableImage;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.ColumnConstraints;
@@ -455,6 +456,8 @@ public class ChannelGridWindow implements QuPathViewerListener {
                 buildMenu(this).show(this, e.getScreenX(), e.getScreenY());
                 e.consume();
             });
+            Tooltip.install(this, Tooltips.of("Right-click for options: show this in the main viewer, "
+                    + "choose a preset, remove it from the grid, grayscale."));
         }
 
         /** Identifies the panel across rebuilds: its channel's name, or the merged panel. */
@@ -781,12 +784,14 @@ public class ChannelGridWindow implements QuPathViewerListener {
 
         String shown = panel.preset != null ? "preset " + panel.preset.name()
                 : panel.channel != null ? panel.channel.getName() : null;
-        var use = new MenuItem(shown == null ? "Use in main viewer" : "Use " + shown + " in main viewer");
+        var use = Tooltips.on(new MenuItem(shown == null ? "Use in main viewer" : "Use " + shown + " in main viewer"),
+                "Show this panel's channel, or preset, in the main viewer. The grid keeps its panels.");
         use.setDisable(shown == null);
         use.setOnAction(e -> useInMainViewer(panel));
         menu.getItems().add(use);
         if (panels.contains(panel)) {
-            var remove = new MenuItem("Remove from grid");
+            var remove = Tooltips.on(new MenuItem("Remove from grid"),
+                    "Take this panel out of the grid. The main viewer is not changed.");
             remove.setOnAction(e -> {
                 removed.add(panel.key());
                 rebuildPanels();
@@ -794,7 +799,8 @@ public class ChannelGridWindow implements QuPathViewerListener {
             menu.getItems().add(remove);
         }
         if (!removed.isEmpty()) {
-            var restore = new MenuItem("Restore removed panels (" + removed.size() + ")");
+            var restore = Tooltips.on(new MenuItem("Restore removed panels (" + removed.size() + ")"),
+                    "Bring back every panel removed from the grid.");
             restore.setOnAction(e -> {
                 removed.clear();
                 rebuildPanels();
@@ -807,10 +813,14 @@ public class ChannelGridWindow implements QuPathViewerListener {
             addShowChoices(menu, panel);
         }
 
-        var panelsMenu = new Menu("Panels...");
+        var panelsMenu = Tooltips.on(new Menu("Panels..."), "What the grid shows.");
         var panelsGroup = new ToggleGroup();
         for (Panels m : Panels.values()) {
-            var item = new RadioMenuItem(m.label);
+            var item = Tooltips.on(new RadioMenuItem(m.label), switch (m) {
+                case VISIBLE -> "One panel per channel shown in the main viewer.";
+                case ALL -> "One panel per channel of the image, shown or not.";
+                case PRESETS -> "One panel per display preset saved in the project that fits this image.";
+            });
             item.setToggleGroup(panelsGroup);
             item.setSelected(panelsMode() == m);
             item.setOnAction(e -> {
@@ -822,17 +832,23 @@ public class ChannelGridWindow implements QuPathViewerListener {
             panelsMenu.getItems().add(item);
         }
 
-        var syncMenu = new Menu("Sync to...");
+        var syncMenu = Tooltips.on(new Menu("Sync to..."), "What the panels centre on.");
         var syncGroup = new ToggleGroup();
         for (Sync s : Sync.values()) {
-            var item = new RadioMenuItem(s.label);
+            var item = Tooltips.on(new RadioMenuItem(s.label), switch (s) {
+                case CURSOR -> "Follow the mouse over the main viewer. Hold Shift to stop following.";
+                case VIEWER_CENTER -> "The centre of the main viewer.";
+                case SELECTED_OBJECT -> "The selected object, or the viewer centre if none is selected.";
+                case NONE -> "Stay where they are.";
+            });
             item.setToggleGroup(syncGroup);
             item.setSelected(sync() == s);
             item.setOnAction(e -> ChannelToolsPreferences.GRID_SYNC.set(s.name()));
             syncMenu.getItems().add(item);
         }
 
-        var zoomMenu = new Menu("Zoom...");
+        var zoomMenu = Tooltips.on(new Menu("Zoom..."),
+                "Magnification of the panels. 100% is one image pixel per screen pixel.");
         var zoomGroup = new ToggleGroup();
         for (Object[] z : ZOOMS) {
             double ds = (Double) z[1];
@@ -845,15 +861,22 @@ public class ChannelGridWindow implements QuPathViewerListener {
 
         menu.getItems().addAll(syncMenu, zoomMenu, new SeparatorMenuItem(),
                 panelsMenu,
-                check("Show merged image", ChannelToolsPreferences.GRID_MERGED),
-                check("Show channel names", ChannelToolsPreferences.GRID_NAMES),
-                check("Show cursor", ChannelToolsPreferences.GRID_CURSOR),
-                check("Show overlays", ChannelToolsPreferences.GRID_OVERLAYS),
+                Tooltips.on(check("Show merged image", ChannelToolsPreferences.GRID_MERGED),
+                        "Add a panel showing the main viewer's channels combined."),
+                Tooltips.on(check("Show channel names", ChannelToolsPreferences.GRID_NAMES),
+                        "Label each panel with its channel or preset."),
+                Tooltips.on(check("Show cursor", ChannelToolsPreferences.GRID_CURSOR),
+                        "Mark the mouse position from the main viewer in every panel."),
+                Tooltips.on(check("Show overlays", ChannelToolsPreferences.GRID_OVERLAYS),
+                        "Draw annotations and detections, as in the main viewer."),
                 new SeparatorMenuItem(),
-                check("All channels in grayscale", ChannelToolsPreferences.GRID_GRAYSCALE));
+                Tooltips.on(check("All channels in grayscale", ChannelToolsPreferences.GRID_GRAYSCALE),
+                        "Show every channel panel in grayscale; often easier to read than dark colours. "
+                        + "The main viewer keeps its colours."));
 
         if (panel.channel != null && panel.preset == null) {
-            var one = new CheckMenuItem("This channel in grayscale (" + panel.channel.getName() + ")");
+            var one = Tooltips.on(new CheckMenuItem("This channel in grayscale (" + panel.channel.getName() + ")"),
+                    "Show only this panel in grayscale.");
             one.setSelected(isGrayscale(panel.channel));
             one.setDisable(ChannelToolsPreferences.GRID_GRAYSCALE.get());
             one.setOnAction(e -> {
@@ -867,13 +890,14 @@ public class ChannelGridWindow implements QuPathViewerListener {
             });
             menu.getItems().add(one);
         }
-        return menu;
+        return Tooltips.install(menu);
     }
 
     /** The panel's own channel and every saved preset, to choose what the panel shows. */
     private void addShowChoices(ContextMenu menu, Panel panel) {
         var showGroup = new ToggleGroup();
-        var own = new RadioMenuItem(panel.channel == null ? "Merged image" : panel.channel.getName());
+        var own = Tooltips.on(new RadioMenuItem(panel.channel == null ? "Merged image" : panel.channel.getName()),
+                "Show the panel's own channel.");
         own.setToggleGroup(showGroup);
         own.setSelected(panel.preset == null);
         own.setOnAction(e -> panel.showPreset(null));
@@ -887,7 +911,8 @@ public class ChannelGridWindow implements QuPathViewerListener {
             menu.getItems().add(none);
         }
         for (String name : names) {
-            var item = new RadioMenuItem("Preset: " + name);
+            var item = Tooltips.on(new RadioMenuItem("Preset: " + name),
+                    "Show this display preset's channels, colours and ranges in this panel.");
             item.setToggleGroup(showGroup);
             item.setSelected(panel.preset != null && name.equals(panel.preset.name()));
             item.setOnAction(e -> panel.showPreset(name));
