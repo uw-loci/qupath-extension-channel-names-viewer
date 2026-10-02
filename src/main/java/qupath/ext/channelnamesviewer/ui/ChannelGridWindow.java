@@ -129,6 +129,8 @@ public class ChannelGridWindow implements QuPathViewerListener {
 
     /** Preset shown in a panel instead of its own channel, by the panel's key. */
     private final Map<String, String> panelPresets = new HashMap<>();
+    /** Presets added in empty cells, in the order added; kept across images, shown where they fit. */
+    private final List<String> addedPresets = new ArrayList<>();
     /** Panels removed from the grid, by key; kept across images until restored. */
     private final Set<String> removed = new java.util.LinkedHashSet<>();
     /** True while this window changes the main viewer's channels. */
@@ -359,6 +361,12 @@ public class ChannelGridWindow implements QuPathViewerListener {
             panels.add(new Panel(c, null));
         }
         panels.removeIf(p -> removed.contains(p.key()));
+        var fitting = presetNames();
+        for (String name : addedPresets) {
+            if (fitting.contains(name)) {
+                panels.add(new Panel(null, name, true));
+            }
+        }
         if (ChannelToolsPreferences.GRID_MERGED.get() || panels.isEmpty()) {
             panels.add(new Panel(null, null));
         }
@@ -389,11 +397,18 @@ public class ChannelGridWindow implements QuPathViewerListener {
             GridPane.setVgrow(cell, Priority.ALWAYS);
             grid.add(cell, i % cols, i / cols);
         }
-        // Unused cells stay black rather than showing the separator color
+        // Unused cells stay black rather than showing the separator color; a preset can be added in one
         for (int i = n; i < rows * cols; i++) {
             var filler = new Pane();
             filler.setStyle("-fx-background-color: black;");
             filler.setMinSize(0, 0);
+            filler.setOnContextMenuRequested(e -> {
+                buildMenu(null).show(filler, e.getScreenX(), e.getScreenY());
+                e.consume();
+            });
+            if (mode != Panels.PRESETS) {
+                Tooltip.install(filler, Tooltips.of("Right-click to show a display preset here."));
+            }
             grid.add(filler, i % cols, i / cols);
         }
         requestUpdate();
@@ -406,7 +421,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
         label.setWrapText(true);
         label.setPadding(new javafx.geometry.Insets(12));
         label.setOnContextMenuRequested(e -> {
-            buildMenu(new Panel(null, null)).show(label, e.getScreenX(), e.getScreenY());
+            buildMenu(null).show(label, e.getScreenX(), e.getScreenY());
             e.consume();
         });
         grid.add(label, 0, 0);
@@ -460,12 +475,19 @@ public class ChannelGridWindow implements QuPathViewerListener {
         private WritableImage imgFX;
         /** The preset shown instead of the channel; null to show the channel. */
         private PresetView preset;
-        /** The preset this tile is for, in one-per-preset mode; null otherwise. */
+        /** The preset this tile is for, in one-per-preset mode or when added; null otherwise. */
         private final String tilePreset;
+        /** True for a preset added in an empty cell. */
+        private final boolean added;
 
         Panel(ChannelDisplayInfo channel, String tilePreset) {
+            this(channel, tilePreset, false);
+        }
+
+        Panel(ChannelDisplayInfo channel, String tilePreset, boolean added) {
             this.channel = channel;
             this.tilePreset = tilePreset;
+            this.added = added;
             this.renderer = new Renderer(this);
             // In one-per-preset mode the tiles are the presets; the merged panel stays merged
             String presetName = tilePreset != null ? tilePreset
@@ -479,14 +501,16 @@ public class ChannelGridWindow implements QuPathViewerListener {
                 buildMenu(this).show(this, e.getScreenX(), e.getScreenY());
                 e.consume();
             });
-            Tooltip.install(this, Tooltips.of(tilePreset != null || channel == null
+            Tooltip.install(this, Tooltips.of(added
+                    ? "Right-click to change the preset, show it in the main viewer, or remove it."
+                    : tilePreset != null || channel == null
                     ? "Right-click to show this in the main viewer or remove it from the grid."
                     : "Right-click to show this in the main viewer, pick a preset, remove it, or show it in grayscale."));
         }
 
         /** Identifies the panel across rebuilds: its channel's name, or the merged panel. */
         String key() {
-            return tilePreset != null ? "<preset>" + tilePreset : channel == null ? "<merged>" : channel.getName();
+            return added ? "<added>" + tilePreset : tilePreset != null ? "<preset>" + tilePreset : channel == null ? "<merged>" : channel.getName();
         }
 
         void showPreset(String name) {
@@ -803,8 +827,20 @@ public class ChannelGridWindow implements QuPathViewerListener {
     // Context menu
     // ------------------------------------------------------------------
 
+    /** The right-click menu of a panel, or of an empty cell or empty grid when {@code panel} is null. */
     private ContextMenu buildMenu(Panel panel) {
         var menu = new ContextMenu();
+        if (panel == null) {
+            if (panelsMode() != Panels.PRESETS && display != null) {
+                addPresetChoices(menu, null);
+            }
+            if (!removed.isEmpty()) {
+                menu.getItems().addAll(restoreItem(), new SeparatorMenuItem());
+            }
+            addCommonItems(menu);
+            noMnemonics(menu.getItems());
+            return Tooltips.install(menu);
+        }
 
         String shown = panel.preset != null ? "preset " + panel.preset.name()
                 : panel.channel != null ? panel.channel.getName() : null;
@@ -817,26 +853,106 @@ public class ChannelGridWindow implements QuPathViewerListener {
             var remove = Tooltips.on(new MenuItem("Remove from grid"),
                     "Take this panel out of the grid. The main viewer is not changed.");
             remove.setOnAction(e -> {
-                removed.add(panel.key());
+                if (panel.added) {
+                    addedPresets.remove(panel.tilePreset);
+                } else {
+                    removed.add(panel.key());
+                }
                 rebuildPanels();
             });
             menu.getItems().add(remove);
         }
         if (!removed.isEmpty()) {
-            var restore = Tooltips.on(new MenuItem("Restore removed panels (" + removed.size() + ")"),
-                    "Bring back every panel removed from the grid.");
-            restore.setOnAction(e -> {
-                removed.clear();
-                rebuildPanels();
-            });
-            menu.getItems().add(restore);
+            menu.getItems().add(restoreItem());
         }
         menu.getItems().add(new SeparatorMenuItem());
 
-        if (panel.tilePreset == null && panelsMode() != Panels.PRESETS) {
+        if (panel.added) {
+            addPresetChoices(menu, panel);
+        } else if (panel.tilePreset == null && panelsMode() != Panels.PRESETS) {
             addShowChoices(menu, panel);
         }
+        addCommonItems(menu);
 
+        if (panel.channel != null && panel.preset == null) {
+            var one = Tooltips.on(new CheckMenuItem("This channel in grayscale (" + panel.channel.getName() + ")"),
+                    "Show only this panel in grayscale.");
+            one.setSelected(isGrayscale(panel.channel));
+            one.setDisable(ChannelToolsPreferences.GRID_GRAYSCALE.get());
+            one.setOnAction(e -> {
+                if (one.isSelected()) {
+                    grayChannels.add(panel.channel.getName());
+                } else {
+                    grayChannels.remove(panel.channel.getName());
+                }
+                localChanges.incrementAndGet();
+                requestUpdate();
+            });
+            menu.getItems().add(one);
+        }
+        // Channel and preset names often contain '_', which a menu would take as a mnemonic and hide
+        noMnemonics(menu.getItems());
+        return Tooltips.install(menu);
+    }
+
+    private MenuItem restoreItem() {
+        var restore = Tooltips.on(new MenuItem("Restore removed panels (" + removed.size() + ")"),
+                "Bring back every panel removed from the grid.");
+        restore.setOnAction(e -> {
+            removed.clear();
+            rebuildPanels();
+        });
+        return restore;
+    }
+
+    /**
+     * The saved presets that fit this image, to show one in an empty cell ({@code panel} null)
+     * or to change the preset of a panel added that way.
+     */
+    private void addPresetChoices(ContextMenu menu, Panel panel) {
+        var names = presetNames();
+        if (names.isEmpty()) {
+            var none = new MenuItem(qupath.getProject() == null ? "Display presets need an open project"
+                    : allPresetNames().isEmpty() ? "No display presets -- save one in Brightness/Contrast"
+                    : "No display preset fits this image's channels");
+            none.setDisable(true);
+            menu.getItems().addAll(none, new SeparatorMenuItem());
+            return;
+        }
+        if (panel == null) {
+            menu.getItems().add(Tooltips.heading("Show a preset here"));
+        }
+        var group = new ToggleGroup();
+        for (String name : names) {
+            String tip = "Show this display preset's channels, colors and ranges in a panel of its own.";
+            MenuItem item;
+            if (panel == null) {
+                item = new MenuItem("Preset: " + name);
+            } else {
+                var radio = new RadioMenuItem("Preset: " + name);
+                radio.setToggleGroup(group);
+                radio.setSelected(name.equals(panel.tilePreset));
+                item = radio;
+            }
+            Tooltips.on(item, tip);
+            item.setOnAction(e -> {
+                if (panel == null) {
+                    addedPresets.add(name);
+                } else {
+                    int i = addedPresets.indexOf(panel.tilePreset);
+                    if (i >= 0) {
+                        addedPresets.set(i, name);
+                    }
+                }
+                rebuildPanels();
+            });
+            menu.getItems().add(item);
+        }
+        menu.getItems().add(new SeparatorMenuItem());
+    }
+
+    /** Sync, zoom, panel and display options, shared by every menu. */
+    private void addCommonItems(ContextMenu menu) {
         var panelsMenu = Tooltips.on(new Menu("Panels..."), "Choose which panels the grid shows.");
         var panelsGroup = new ToggleGroup();
         for (Panels m : Panels.values()) {
@@ -897,26 +1013,6 @@ public class ChannelGridWindow implements QuPathViewerListener {
                 Tooltips.on(check("All channels in grayscale", ChannelToolsPreferences.GRID_GRAYSCALE),
                         "Show every channel panel in grayscale, which is easier to read than dark colors. "
                         + "The main viewer keeps its colors."));
-
-        if (panel.channel != null && panel.preset == null) {
-            var one = Tooltips.on(new CheckMenuItem("This channel in grayscale (" + panel.channel.getName() + ")"),
-                    "Show only this panel in grayscale.");
-            one.setSelected(isGrayscale(panel.channel));
-            one.setDisable(ChannelToolsPreferences.GRID_GRAYSCALE.get());
-            one.setOnAction(e -> {
-                if (one.isSelected()) {
-                    grayChannels.add(panel.channel.getName());
-                } else {
-                    grayChannels.remove(panel.channel.getName());
-                }
-                localChanges.incrementAndGet();
-                requestUpdate();
-            });
-            menu.getItems().add(one);
-        }
-        // Channel and preset names often contain '_', which a menu would take as a mnemonic and hide
-        noMnemonics(menu.getItems());
-        return Tooltips.install(menu);
     }
 
     /** The panel's own channel and every saved preset, to choose what the panel shows. */

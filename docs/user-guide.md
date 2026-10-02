@@ -245,7 +245,7 @@ The table follows the channels shown in the viewer: switch a channel on in Brigh
 - **Sampling.** Pixels are read at full resolution from a 6 × 6 grid of 170-pixel tiles spread over the image, including its edges: about a million pixels per channel. A smaller image is read whole. Full resolution keeps the noise at the width you see when zoomed in. Only the current z-slice and timepoint are read; after moving to another, click **Resample**.
 - **3 × noise.** On a Gaussian background, a minimum 3 noise widths up hides about 99.9% of background pixels. Autofluorescence often has a longer bright tail, which leaves more of it visible; raise **Minimum** if so.
 - **Off-tissue area.** Empty glass or unscanned area is dark in every channel at once, and in many channels it is the tallest histogram peak, so it would be taken for the background. Before measuring, the tool ranks each sampled pixel within each channel and takes the median rank across channels: off-tissue pixels are low in nearly all channels, whereas a negative cell is low in its own marker but not in the nuclear or autofluorescence channels. When these medians show a separate low peak with a deep valley above it, those pixels are left out of every channel, and the status line says how many (for example, *23% of the samples were off the tissue (dark in every channel) and were left out*). An image that is all tissue is left as it is. This needs at least three channels; with fewer, or if off-tissue area is not dark in every channel, check each row's histogram. Small tissue pieces can also fall between the sampled tiles.
-- **Padding.** Pixels at a channel's lowest value are ignored when there are more of them than of the next value, since this is usually unscanned or padded area.
+- **Padding and clipped values.** Pixels at a channel's lowest value are ignored when there are more of them than of the next value. This is usually unscanned or padded area, or, in unmixed images such as inForm component data, negative values clipped to 0 (up to two thirds of a sparse marker's pixels). The background is then measured on the remaining pixels.
 - **Display only.** Only display ranges change; pixel values, measurements and classifiers are not affected. The ranges are saved with the image's display settings when you save the image, and they affect rendered exports.
 - **Per image.** Ranges are set from each image's own pixels, so do not compare channel brightness between images by eye. For matched ranges, save a display preset in Brightness/Contrast and apply it to each image.
 - **Switching images.** After you open another image, the table fills in for the new image but nothing is applied until you click **Apply**. **Revert** works for the current image only.
@@ -305,6 +305,7 @@ A grid of panels that follow the main viewer as you pan, like QuPath's **View > 
 
 | Item | What it does |
 |---|---|
+| Show a preset here | *(Empty cells only.)* Add a panel showing a display preset that fits the image. |
 | Use ... in main viewer | Show this panel's channel, or preset, in the main viewer. |
 | Remove from grid | Take this panel out of the grid. The main viewer is not changed. Removed panels stay removed when you switch images. |
 | Restore removed panels (N) | Bring back every removed panel. |
@@ -325,6 +326,10 @@ A grid of panels that follow the main viewer as you pan, like QuPath's **View > 
 3. **In the grid's right-click menu, choose Panels... > One per display preset.** Each preset gets a tile, next to the merged image.
 
 ![The grid viewer with one tile per display preset: B cells and macrophages, T cells, Tumor, and the merged image.](images/Docs_ChannelGrid_Presets.png)
+
+**A preset in an empty cell.** When the grid has empty cells (for example eight panels in a 3 × 3 grid), right-click one and choose a preset under **Show a preset here**. It takes the next free cell, before the merged image, and keeps its own colors even with **All channels in grayscale** on. To change it, right-click it and pick another preset; **Remove from grid** takes it out. Added presets stay when you switch images and show only on images they fit.
+
+![A 3 x 3 grid of a 7-color lung cancer image: seven channels in grayscale, a T cells preset in color added in the empty cell, and the merged image.](images/Docs_Grid_AddedPreset.png)
 
 A preset only appears if the current image has the same channels as the image it was saved from: the same number of channels with the same names. This is the same rule Brightness/Contrast uses for its **Settings** list. Presets saved, changed or deleted while the grid is open appear within about 2 seconds.
 

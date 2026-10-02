@@ -30,8 +30,6 @@ After the restart you will see:
 - a new menu, **Extensions > Channel Names Viewer**;
 - the keyboard shortcut `Ctrl+Shift+C` (`Cmd+Shift+C` on macOS).
 
-> **Note:** v1.1.0 is not released yet; the current release is v1.0.9, which has the legend but not the channel tools.
-
 ---
 
 ## Quick start
@@ -83,6 +81,7 @@ Gives the visible channels evenly spaced colors around a color wheel, one spoke 
 A grid of panels that follow the main viewer as you pan, like QuPath's **View > Show channel viewer**, with extra options:
 - show any channel, or all of them, in grayscale without changing the main viewer;
 - give each saved display preset its own tile, such as "T cells" next to "Tumor";
+- right-click an empty cell to show a display preset there;
 - put a panel's channel or preset into the main viewer from the panel's right-click menu;
 - remove panels you do not need.
 
@@ -96,7 +95,7 @@ This extension does not replace [Sara McArdle's `FluorescentChannelNames.groovy`
 
 ## What's new
 
-**v1.1.0** (unreleased) — Channel tools: background-aware auto contrast, a channel color wheel (port of Sara McArdle's Channel Color Chooser), and a channel grid viewer with grayscale panels and display-preset tiles. The right-click menu is now split into Channel tools and Legend window sections, and every menu item has a tooltip.
+**v1.1.0** — Channel tools: background-aware auto contrast, a channel color wheel (port of Sara McArdle's Channel Color Chooser), and a channel grid viewer with grayscale panels and display-preset tiles (including presets added in empty cells). The right-click menu is now split into Channel tools and Legend window sections, and every menu item has a tooltip.
 
 **v1.0.9** — Toolbar button icon redesigned from the `Ch` text glyph to a theme-aware three-bar icon.
 
@@ -136,4 +135,4 @@ Toolbar button placement remains best-effort; if QuPath reorganizes its toolbar 
 Apache License 2.0. Copyright 2026 Regents of the University of Wisconsin-Madison. See [LICENSE](LICENSE). The channel color wheel is adapted from Sara McArdle's MIT-licensed Channel Color Chooser; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 **Author:** Mike Nelson — University of Wisconsin-Madison
-**Version:** 1.1.0 (unreleased; current release 1.0.9)
+**Version:** 1.1.0
