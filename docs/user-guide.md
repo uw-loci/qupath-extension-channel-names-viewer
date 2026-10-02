@@ -213,11 +213,11 @@ QuPath's **Auto** sets each channel's display range from percentiles of all its 
 #### Steps
 
 1. **Open a fluorescence image and select the channels to adjust** in Brightness/Contrast.
-2. **Choose Extensions > Channel Names Viewer > Background-aware auto contrast...** The tool reads the image and applies the new ranges to the viewer right away. The table lists each channel, and the status line reads, for example, *5 channel(s) from 1,040,400 sampled pixels each.*
+2. **Choose Extensions > Channel Names Viewer > Background-aware auto contrast...** While the tool reads the image, the table and status line show *Reading pixels...* in red, with a count of tiles read. It then applies the new ranges to the viewer and lists each channel; the status line reads, for example, *5 channel(s) from 1,040,400 sampled pixels each.*
 3. **If haze remains, drag Minimum to the right.** The viewer updates as you drag.
 4. **To undo, click Revert.** The channels go back to the ranges they had before the tool changed them.
 
-![The auto contrast window: Apply to (visible or all channels), the Minimum slider at background + 3.0 x noise, Full brightness 0.5%, and a table with each channel's histogram, background, noise, minimum, maximum and a note.](images/Docs_AutoContrast_Window.png)
+![The auto contrast window on Orion6: Apply to (visible or all channels), the Minimum slider at background + 3.0 x noise, Full brightness 0.5%, a table with each channel's histogram, background, noise, minimum, maximum and a note, and a status line saying 23% of the samples were off the tissue and were left out.](images/Docs_AutoContrast_Window.png)
 
 #### Settings
 
@@ -236,13 +236,15 @@ The settings are remembered between sessions.
 - **Max**: values at or above it show at full brightness.
 - **Note**: how much of the channel is above the minimum, or why percentiles were used.
 
-Hover over a histogram to see what its lines mean. The bars are pixel counts on a square-root scale; the dark gray line is the background peak, orange is the minimum, and blue the maximum.
+Hover over a histogram to see what its lines mean. The bars are pixel counts on a square-root scale, and the value axis is stretched near the background and compressed above it, so the background peak and the minimum stay readable next to a much higher maximum. The dark gray line is the background peak, orange is the minimum, and blue the maximum.
+
+The table follows the channels shown in the viewer: switch a channel on in Brightness/Contrast and its row appears (and, once ranges are applied, its range is set).
 
 #### How it works, and its limits
 
 - **Sampling.** Pixels are read at full resolution from a 6 × 6 grid of 170-pixel tiles spread over the image, including its edges: about a million pixels per channel. A smaller image is read whole. Full resolution keeps the noise at the width you see when zoomed in. Only the current z-slice and timepoint are read; after moving to another, click **Resample**.
 - **3 × noise.** On a Gaussian background, a minimum 3 noise widths up hides about 99.9% of background pixels. Autofluorescence often has a longer bright tail, which leaves more of it visible; raise **Minimum** if so.
-- **Mostly-glass slides.** If tissue covers only a small part of the image, the background peak may be the glass rather than the tissue, and some tissue autofluorescence will remain. Small tissue pieces can also fall between the sampled tiles. Check each row's histogram.
+- **Off-tissue area.** Empty glass or unscanned area is dark in every channel at once, and in many channels it is the tallest histogram peak, so it would be taken for the background. Before measuring, the tool ranks each sampled pixel within each channel and takes the median rank across channels: off-tissue pixels are low in nearly all channels, whereas a negative cell is low in its own marker but not in the nuclear or autofluorescence channels. When these medians show a separate low peak with a deep valley above it, those pixels are left out of every channel, and the status line says how many (for example, *23% of the samples were off the tissue (dark in every channel) and were left out*). An image that is all tissue is left as it is. This needs at least three channels; with fewer, or if off-tissue area is not dark in every channel, check each row's histogram. Small tissue pieces can also fall between the sampled tiles.
 - **Padding.** Pixels at a channel's lowest value are ignored when there are more of them than of the next value, since this is usually unscanned or padded area.
 - **Display only.** Only display ranges change; pixel values, measurements and classifiers are not affected. The ranges are saved with the image's display settings when you save the image, and they affect rendered exports.
 - **Per image.** Ranges are set from each image's own pixels, so do not compare channel brightness between images by eye. For matched ranges, save a display preset in Brightness/Contrast and apply it to each image.
@@ -330,7 +332,7 @@ A preset only appears if the current image has the same channels as the image it
 
 | What you see | Cause | Fix |
 |---|---|---|
-| *No narrow background peak (dense stain or empty channel) -- percentiles used* in the auto contrast table | The channel's histogram is a single broad peak with no narrow background below it. A dense stain covering the whole field (such as a nuclear stain on solid tissue) and a channel with no staining at all look the same. | For a dense stain, this is expected. For an unstained or negative-control channel, the 0.1st to 99.9th percentile range stretches its noise into haze: turn the channel off, or set its range by hand in Brightness/Contrast. **Full brightness** has no effect on these channels. |
+| *No narrow background peak -- percentiles used* in the auto contrast table (hover over it for details) | The channel's histogram is a single broad peak with no narrow background below it. A dense stain covering the whole field (such as a nuclear stain on solid tissue) and a channel with no staining at all look the same. | For a dense stain, this is expected. For an unstained or negative-control channel, the 0.1st to 99.9th percentile range stretches its noise into haze: turn the channel off, or set its range by hand in Brightness/Contrast. **Full brightness** has no effect on these channels. |
 | *Almost nothing above min -- channel may be empty* | Fewer than 0.2% of the sampled pixels are above the minimum. | Expected for a channel with little or no staining in this image; it stays black. |
 | *This image is RGB; there are no channels to adjust.* | Brightfield or RGB image. | The tools work on fluorescence channels only. |
 | *Could not read pixels: ...* | The image could not be read. | Check that the image opens in QuPath, and look in **View > Show log**. |

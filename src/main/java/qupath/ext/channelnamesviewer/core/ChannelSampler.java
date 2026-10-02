@@ -23,10 +23,12 @@ public final class ChannelSampler {
 
     /**
      * @param cancelled polled between tiles
+     * @param progress  told (tiles read, total tiles) after each tile; may be null
      * @return values[channel][pixel], or null if cancelled
      */
     public static float[][] sample(ImageServer<BufferedImage> server, int z, int t,
-                                   BooleanSupplier cancelled) throws IOException {
+                                   BooleanSupplier cancelled,
+                                   java.util.function.BiConsumer<Integer, Integer> progress) throws IOException {
         int w = server.getWidth();
         int h = server.getHeight();
         int nc = server.nChannels();
@@ -37,6 +39,7 @@ public final class ChannelSampler {
         }
         float[][] values = new float[nc][(int) total];
         int offset = 0;
+        int done = 0;
         for (int[] r : tiles) {
             if (cancelled != null && cancelled.getAsBoolean()) {
                 return null;
@@ -51,6 +54,10 @@ public final class ChannelSampler {
                 System.arraycopy(buf, 0, values[c], offset, Math.min(n, values[c].length - offset));
             }
             offset += n;
+            done++;
+            if (progress != null) {
+                progress.accept(done, tiles.length);
+            }
         }
         return values;
     }

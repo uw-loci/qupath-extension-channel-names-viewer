@@ -34,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.channelnamesviewer.core.BackgroundContrast;
 import qupath.ext.channelnamesviewer.core.ChannelSampler;
+import qupath.ext.channelnamesviewer.core.TissueMask;
 import qupath.ext.channelnamesviewer.preferences.ChannelToolsPreferences;
 import qupath.lib.display.ChannelDisplayInfo;
 import qupath.lib.display.DirectServerChannelInfo;
@@ -60,6 +61,20 @@ public class AutoContrastWindow {
     private final Stage stage = new Stage();
     private final TableView<Row> table = new TableView<>();
     private final Label status = new Label();
+    /** Shown in the empty table: "Reading pixels..." while reading, else that there is nothing to adjust. */
+    private final Label placeholder = new Label();
+    /** Red, bold and larger, so a read in progress is not mistaken for an empty result. */
+    private static final String READING_STYLE =
+            "-fx-text-fill: #e0201b; -fx-font-weight: bold; -fx-font-size: 1.25em;";
+    private static final String NOTHING_TO_ADJUST = "No fluorescence channels to adjust";
+    /** Slow pulse (well under 3 flashes per second) while reading. */
+    private final javafx.animation.Timeline pulse = new javafx.animation.Timeline(
+            new javafx.animation.KeyFrame(javafx.util.Duration.ZERO,
+                    new javafx.animation.KeyValue(status.opacityProperty(), 1.0),
+                    new javafx.animation.KeyValue(placeholder.opacityProperty(), 1.0)),
+            new javafx.animation.KeyFrame(javafx.util.Duration.millis(700),
+                    new javafx.animation.KeyValue(status.opacityProperty(), 0.35),
+                    new javafx.animation.KeyValue(placeholder.opacityProperty(), 0.35)));
     private final Slider noiseSlider = new Slider(0, 8, 3);
     private final Label noiseLabel = new Label();
     private final Spinner<Double> saturatedSpinner = new Spinner<>(
@@ -69,6 +84,8 @@ public class AutoContrastWindow {
     private final Button applyButton = new Button("Apply");
     private final Button revertButton = new Button("Revert");
 
+    /** Fraction of the sampled pixels left out as off-tissue. */
+    private double offTissueFraction;
     /** Samples of the current image, per server channel; null until read. */
     private float[][] samples;
     private ImageData<BufferedImage> sampledImage;
@@ -91,7 +108,10 @@ public class AutoContrastWindow {
         stage.initModality(Modality.NONE);
         stage.setTitle(TITLE);
         stage.setScene(new Scene(buildContent(), 1000, 560));
-        stage.setOnHidden(e -> qupath.imageDataProperty().removeListener(imageListener));
+        stage.setOnHidden(e -> {
+            qupath.imageDataProperty().removeListener(imageListener);
+            watchSelection(null);
+        });
         stage.setOnShown(e -> qupath.imageDataProperty().addListener(imageListener));
     }
 
@@ -222,10 +242,19 @@ public class AutoContrastWindow {
                 "Max", "Display maximum: values at or above it show at full brightness."));
         var noteCol = new TableColumn<Row, String>("Note");
         noteCol.setCellValueFactory(c -> new javafx.beans.property.SimpleStringProperty(note(c.getValue())));
+        noteCol.setCellFactory(c -> new TableCell<>() {
+            @Override
+            protected void updateItem(String text, boolean empty) {
+                super.updateItem(text, empty);
+                setText(empty ? null : text);
+                setTooltip(empty || text == null ? null : Tooltips.of(noteExplanation(text)));
+            }
+        });
         noteCol.setPrefWidth(230);
         header(noteCol, "Note", "How much of the channel is above the minimum, or why percentiles were used instead.");
         table.getColumns().add(noteCol);
-        table.setPlaceholder(new Label("No fluorescence channels to adjust"));
+        placeholder.setText(NOTHING_TO_ADJUST);
+        table.setPlaceholder(placeholder);
         table.setFixedCellSize(HIST_H + 8);
     }
 
@@ -268,10 +297,22 @@ public class AutoContrastWindow {
         return col;
     }
 
+    /** The longer explanation shown when hovering over a note. */
+    private static String noteExplanation(String note) {
+        if (note.startsWith("No narrow")) {
+            return "The histogram is one broad peak: a dense stain covering the field, or a channel with no "
+                    + "staining (the two look the same). The 0.1st to 99.9th percentiles were used instead.";
+        }
+        if (note.startsWith("Almost nothing")) {
+            return "Fewer than 0.2% of the sampled pixels are above the minimum; the channel stays black.";
+        }
+        return "Share of the sampled tissue pixels above the minimum, i.e. shown above black.";
+    }
+
     private static String note(Row row) {
         var r = row.result();
         if (!r.backgroundPeak()) {
-            return "No narrow background peak (dense stain or empty channel) -- percentiles used";
+            return "No narrow background peak -- percentiles used";
         }
         if (r.empty()) {
             return "Almost nothing above min -- channel may be empty";
@@ -288,22 +329,26 @@ public class AutoContrastWindow {
         var gc = canvas.getGraphicsContext2D();
         float[] v = row.values();
         var r = row.result();
-        double lo = Math.min(r.min(), Double.isNaN(r.background()) ? r.min() : r.background());
-        double hi = r.max();
-        double span = hi - lo;
-        lo -= 0.15 * span;
-        hi += 0.1 * span;
-        if (!(hi > lo)) {
+        boolean peak = !Double.isNaN(r.background()) && r.noise() > 0;
+        // Value axis: linear near the background, logarithmic above it (in noise widths),
+        // so the background peak and the minimum are not squeezed into a few bars beside
+        // a maximum many times higher
+        double start = peak ? r.background() - 5 * r.noise() : r.min() - 0.05 * (r.max() - r.min());
+        double step = peak ? r.noise() : (r.max() - r.min()) / 50;
+        if (!(step > 0)) {
             return canvas;
         }
+        double end = Math.log1p((r.max() - start) / step) * 1.08;
+        java.util.function.DoubleUnaryOperator x = value ->
+                value <= start ? 0 : Math.log1p((value - start) / step) / end;
         long[] counts = new long[HIST_BINS];
-        for (float x : v) {
-            int i = (int) ((x - lo) / (hi - lo) * HIST_BINS);
-            if (i >= 0 && i < HIST_BINS) {
+        for (float value : v) {
+            int i = (int) (x.applyAsDouble(value) * HIST_BINS);
+            if (value > start && i < HIST_BINS) {
                 counts[i]++;
             }
         }
-        // Square root keeps the background peak standing out, which a log scale flattens
+        // Square root keeps the background peak standing out, which a log count scale flattens
         double maxRoot = 0;
         for (long c : counts) {
             maxRoot = Math.max(maxRoot, Math.sqrt(c));
@@ -314,12 +359,11 @@ public class AutoContrastWindow {
             double h = maxRoot > 0 ? Math.sqrt(counts[i]) / maxRoot * (HIST_H - 2) : 0;
             gc.fillRect(i * bw, HIST_H - h, Math.max(1, bw - 0.5), h);
         }
-        double scale = HIST_W / (hi - lo);
-        if (!Double.isNaN(r.background())) {
-            marker(gc, (r.background() - lo) * scale, Color.gray(0.3));
+        if (peak) {
+            marker(gc, x.applyAsDouble(r.background()) * HIST_W, Color.gray(0.3));
         }
-        marker(gc, (r.min() - lo) * scale, Color.web("#e07000"));
-        marker(gc, (r.max() - lo) * scale, Color.web("#1f6fd6"));
+        marker(gc, x.applyAsDouble(r.min()) * HIST_W, Color.web("#e07000"));
+        marker(gc, x.applyAsDouble(r.max()) * HIST_W, Color.web("#1f6fd6"));
         return canvas;
     }
 
@@ -334,6 +378,23 @@ public class AutoContrastWindow {
     }
 
     /** The viewer's display, or null. */
+    /** The display whose channel selection the table follows. */
+    private ImageDisplay watched;
+
+    /** Every channel is sampled, so a selection change only needs the table recomputed. */
+    private final javafx.collections.ListChangeListener<ChannelDisplayInfo> selectionListener =
+            c -> Platform.runLater(this::recompute);
+
+    private void watchSelection(ImageDisplay display) {
+        if (watched != null) {
+            watched.selectedChannels().removeListener(selectionListener);
+        }
+        watched = display;
+        if (display != null) {
+            display.selectedChannels().addListener(selectionListener);
+        }
+    }
+
     private ImageDisplay display() {
         var viewer = qupath.getViewer();
         return viewer == null ? null : viewer.getImageDisplay();
@@ -348,6 +409,7 @@ public class AutoContrastWindow {
         table.getItems().clear();
         if (imageData == null || imageData.getServer().isRGB()) {
             sampledImage = imageData;
+            stopReading();
             status.setText(imageData == null ? "No image open." : "This image is RGB; there are no channels to adjust.");
             return;
         }
@@ -359,27 +421,78 @@ public class AutoContrastWindow {
             }
         }
         sampledImage = imageData;
+        watchSelection(viewer.getImageDisplay());
         int z = viewer.getZPosition();
         int t = viewer.getTPosition();
-        status.setText("Reading pixels...");
+        showReading("Reading pixels...");
         var server = imageData.getServer();
         var thread = new Thread(() -> {
             try {
-                float[][] values = ChannelSampler.sample(server, z, t, () -> generation.get() != gen);
+                float[][] values = ChannelSampler.sample(server, z, t, () -> generation.get() != gen,
+                        (done, total) -> {
+                            if (total > 1) {
+                                Platform.runLater(() -> {
+                                    if (generation.get() == gen && samples == null) {
+                                        showReading(String.format("Reading pixels... %d of %d tiles", done, total));
+                                    }
+                                });
+                            }
+                        });
+                // Off-tissue pixels (dark in every channel) would be taken for the background
+                boolean[] tissue = values == null ? null : TissueMask.compute(values);
+                double off = 0;
+                if (tissue != null) {
+                    int kept = 0;
+                    for (boolean t2 : tissue) {
+                        if (t2) {
+                            kept++;
+                        }
+                    }
+                    off = 1 - (double) kept / tissue.length;
+                    for (int c = 0; c < values.length; c++) {
+                        values[c] = TissueMask.select(values[c], tissue);
+                    }
+                }
+                double offTissue = off;
                 Platform.runLater(() -> {
                     if (generation.get() != gen || values == null) {
                         return;
                     }
                     samples = values;
+                    offTissueFraction = offTissue;
                     recompute();
                 });
             } catch (Exception ex) {
                 logger.warn("Could not sample {}: {}", server.getPath(), ex.getMessage());
-                Platform.runLater(() -> status.setText("Could not read pixels: " + ex.getMessage()));
+                Platform.runLater(() -> {
+                    stopReading();
+                    status.setText("Could not read pixels: " + ex.getMessage());
+                });
             }
         }, "channel-auto-contrast");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    private void showReading(String text) {
+        status.setText(text);
+        status.setStyle(READING_STYLE);
+        placeholder.setText(text);
+        placeholder.setStyle(READING_STYLE);
+        if (pulse.getStatus() != javafx.animation.Animation.Status.RUNNING) {
+            pulse.setAutoReverse(true);
+            pulse.setCycleCount(javafx.animation.Animation.INDEFINITE);
+            pulse.play();
+        }
+    }
+
+    private void stopReading() {
+        pulse.stop();
+        status.setOpacity(1);
+        status.setStyle("");
+        placeholder.setOpacity(1);
+        placeholder.setStyle("");
+        placeholder.setText(NOTHING_TO_ADJUST);
     }
 
     /** Recompute every row from the samples, and apply if live. */
@@ -389,6 +502,7 @@ public class AutoContrastWindow {
         if (samples == null || display == null) {
             return;
         }
+        stopReading();
         List<ChannelDisplayInfo> channels = new ArrayList<>(allRadio.isSelected()
                 ? display.availableChannels() : display.selectedChannels());
         // The image's channel order, not the order they were switched on
@@ -412,8 +526,10 @@ public class AutoContrastWindow {
                     v, result));
         }
         table.setItems(FXCollections.observableArrayList(rows));
-        status.setText(String.format("%d channel(s) from %,d sampled pixels each%s%s.", rows.size(),
+        status.setText(String.format("%d channel(s) from %,d sampled pixels each%s%s%s.", rows.size(),
                 samples.length > 0 ? samples[0].length : 0,
+                offTissueFraction > 0 ? String.format("; %.0f%% of the samples were off the tissue (dark in every "
+                        + "channel) and were left out", 100 * offTissueFraction) : "",
                 fallbacks > 0 ? "; " + fallbacks + " without a narrow background peak used percentiles" : "",
                 live ? "" : "; press Apply to set them"));
         if (live) {
