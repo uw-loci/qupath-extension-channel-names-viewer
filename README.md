@@ -95,6 +95,8 @@ This extension does not replace [Sara McArdle's `FluorescentChannelNames.groovy`
 
 ## What's new
 
+**v1.1.1** — Fixed an `InaccessibleObjectException` logged at startup on Windows, when the toolbar button's corner triangle was added before JavaFX had built the button. The triangle is now added once the button is ready.
+
 **v1.1.0** — Channel tools: background-aware auto contrast, a channel color wheel (port of Sara McArdle's Channel Color Chooser), and a channel grid viewer with grayscale panels and display-preset tiles (including presets added in empty cells). The right-click menu is now split into Channel tools and Legend window sections, and every menu item has a tooltip.
 
 **v1.0.9** — Toolbar button icon redesigned from the `Ch` text glyph to a theme-aware three-bar icon.

@@ -12,14 +12,8 @@ import javafx.scene.input.KeyCombination;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.Paint;
-import javafx.scene.shape.ClosePath;
-import javafx.scene.shape.LineTo;
-import javafx.scene.shape.MoveTo;
-import javafx.scene.shape.Path;
 import javafx.scene.shape.Rectangle;
 import org.controlsfx.control.action.Action;
-import org.controlsfx.control.decoration.Decorator;
-import org.controlsfx.control.decoration.GraphicDecoration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.channelnamesviewer.core.ChannelLegendController;
@@ -28,6 +22,7 @@ import qupath.ext.channelnamesviewer.ui.AutoContrastWindow;
 import qupath.ext.channelnamesviewer.ui.ChannelGridWindow;
 import qupath.ext.channelnamesviewer.ui.ChannelLegendStage;
 import qupath.ext.channelnamesviewer.ui.ColorWheelWindow;
+import qupath.ext.channelnamesviewer.ui.ContextMenuIndicator;
 import qupath.ext.channelnamesviewer.ui.Tooltips;
 import qupath.lib.common.Version;
 import qupath.lib.gui.QuPathGUI;
@@ -405,11 +400,8 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
         // buildChannelIcon.
         button.setGraphic(buildChannelIcon(button));
 
-        // The small right-click indicator triangle is added as a ControlsFX
-        // GraphicDecoration anchored to the button's bottom-right CORNER -- the
-        // same mechanism QuPath uses for its Line/Polyline tool buttons, so the
-        // triangle sits at the button edge rather than floating inside the icon.
-        addContextMenuDecoration(qupath, button);
+        // The right-click indicator triangle at the button's bottom-right corner.
+        ContextMenuIndicator.install(button, (x, y) -> showSettingsMenu(qupath, button, x, y));
 
         // Right-click anywhere on the button also opens the legend window's
         // settings menu (background opacity, lock-font toggle, reset).
@@ -418,46 +410,6 @@ public class ChannelNamesViewerExtension implements QuPathExtension, GitHubProje
             e.consume();
         });
         return button;
-    }
-
-    /**
-     * Add the right-click indicator triangle to the toolbar button as a
-     * ControlsFX {@link GraphicDecoration} anchored at {@link Pos#BOTTOM_RIGHT}.
-     * This mirrors QuPath's own {@code ToolBarComponent.addContextMenuDecoration}
-     * (geometry, rotation and opacity copied verbatim) so the triangle sits at
-     * the button corner -- clear of the icon and flush with the button edge --
-     * rather than floating inside the icon graphic.
-     *
-     * <p>ControlsFX decorations require the node to be in a scene, and are lost
-     * when it leaves one, so the decoration is (re-)applied via a
-     * {@code sceneProperty} listener as well as eagerly on the FX thread.</p>
-     */
-    private void addContextMenuDecoration(QuPathGUI qupath, Button button) {
-        double width = 6;
-        Path triangle = new Path(
-                new MoveTo(0, 0),
-                new LineTo(width, 0),
-                new LineTo(width / 2.0, Math.sqrt(width * width / 2.0)),
-                new ClosePath());
-        triangle.setTranslateX(-width);
-        triangle.setTranslateY(-width);
-        triangle.setRotate(-90);
-        triangle.setStroke(null);
-        triangle.setOpacity(0.5);
-        triangle.fillProperty().bind(button.textFillProperty());
-        triangle.setOnMouseClicked(e -> {
-            showSettingsMenu(qupath, button, e.getScreenX(), e.getScreenY());
-            e.consume();
-        });
-        GraphicDecoration decoration = new GraphicDecoration(triangle, Pos.BOTTOM_RIGHT);
-        button.sceneProperty().addListener((obs, oldScene, newScene) -> Platform.runLater(() -> {
-            if (newScene != null) {
-                Decorator.addDecoration(button, decoration);
-            } else {
-                Decorator.removeDecoration(button, decoration);
-            }
-        }));
-        Platform.runLater(() -> Decorator.addDecoration(button, decoration));
     }
 
     /**
