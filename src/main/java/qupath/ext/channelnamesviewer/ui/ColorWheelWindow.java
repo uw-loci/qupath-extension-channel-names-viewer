@@ -3,6 +3,7 @@ package qupath.ext.channelnamesviewer.ui;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import javafx.beans.value.ChangeListener;
 import javafx.collections.ListChangeListener;
@@ -451,17 +452,17 @@ public class ColorWheelWindow {
         var sb = new StringBuilder();
         sb.append("// Channel colors from the Channel Names Viewer color wheel (")
                 .append(wheel.mode() == WheelColors.Mode.CIELAB
-                        ? String.format("CIELAB, L* %.0f", wheel.lightness())
-                        : String.format("HSV, value %.0f%%", 100 * wheel.lightness()))
+                        ? String.format(Locale.ROOT, "CIELAB, L* %.0f", wheel.lightness())
+                        : String.format(Locale.ROOT, "HSV, value %.0f%%", 100 * wheel.lightness()))
                 .append(")\n// Colors are set by channel position; null leaves a channel unchanged\n");
         for (int i = 0; i < channels.size(); i++) {
             int rgb = colors[i];
             int index = channels.get(i).getChannel();
             if (index < nAll) {
-                args[index] = String.format("ColorTools.packRGB(%d, %d, %d)",
+                args[index] = String.format(Locale.ROOT, "ColorTools.packRGB(%d, %d, %d)",
                         (rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
                 sb.append("// ").append(index + 1).append(": ").append(channels.get(i).getName())
-                        .append(String.format("  #%06x", rgb)).append('\n');
+                        .append(String.format(Locale.ROOT, "  #%06x", rgb)).append('\n');
             }
         }
         sb.append("setChannelColors(").append(String.join(", ", args)).append(")\n\n");

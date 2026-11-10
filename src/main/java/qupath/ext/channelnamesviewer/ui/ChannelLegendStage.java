@@ -40,6 +40,7 @@ import qupath.lib.gui.prefs.PathPrefs;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * The Channel Names Viewer legend window.
@@ -270,10 +271,19 @@ public class ChannelLegendStage {
     private void applyBackgroundCss() {
         double op = backgroundOpacity.get();
         // Inline style on root overrides modena's opaque .root background-color.
-        this.root.setStyle(String.format(
+        this.root.setStyle(backgroundCss(op, CORNER_RADIUS_PX));
+    }
+
+    /**
+     * The legend's background style. CSS needs a decimal point, so the opacity is
+     * formatted with Locale.ROOT: "0,750" from a decimal-comma locale is invalid CSS
+     * and JavaFX would drop the whole style.
+     */
+    static String backgroundCss(double opacity, int cornerRadiusPx) {
+        return String.format(Locale.ROOT,
                 "-fx-background-color: rgba(0, 0, 0, %.3f); -fx-background-radius: %d;"
                         + " -fx-background-insets: 0;",
-                op, CORNER_RADIUS_PX));
+                opacity, cornerRadiusPx);
     }
 
     // ----------------------------------------------------------------------

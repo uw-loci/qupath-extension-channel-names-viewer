@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
@@ -765,7 +766,7 @@ public class ChannelGridWindow implements QuPathViewerListener {
             return "";
         }
         var dir = new java.io.File(Projects.getBaseDirectory(project), "resources/display");
-        var files = dir.listFiles((d, name) -> name.toLowerCase().endsWith(".json"));
+        var files = dir.listFiles((d, name) -> name.toLowerCase(Locale.ROOT).endsWith(".json"));
         if (files == null) {
             return project.getPath() + ":none";
         }
